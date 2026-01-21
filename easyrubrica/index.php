@@ -5,7 +5,24 @@
 
 ob_start(); 
 session_start();
+
+// 1. CARGA DE CONFIGURACIÓN
+// Usamos require_once para asegurar que el archivo existe
 require_once 'config/db.php';
+
+// 2. PROTECCIÓN ANTI-NULL (Evita el Fatal Error en instalaciones nuevas)
+if (!isset($pdo)) {
+    if (isset($db)) { 
+        $pdo = $db; 
+    } else {
+        // Si no existe la variable de conexión, detenemos con un mensaje amigable
+        die("<div style='font-family:sans-serif; padding:50px; text-align:center;'>
+                <h2>⚠️ Error de Configuración</h2>
+                <p>No se detecta la conexión a la base de datos en <b>config/db.php</b>.</p>
+                <p>Verifica que la variable de conexión se llame <code>\$pdo</code>.</p>
+             </div>");
+    }
+}
 
 // --- GESTIÓN DE DESCARGA DIRECTA ---
 if (isset($_GET['action']) && $_GET['action'] === 'descargar_plantilla_rubrica') {
@@ -23,15 +40,23 @@ if (isset($_GET['action']) && $_GET['action'] === 'descargar_plantilla_rubrica')
     exit;
 }
 
+// 3. DETECCIÓN DE INSTALACIÓN (Compatible con SQLite y MariaDB)
 $needsInstall = false;
 try {
-    $check = $pdo->query("SHOW TABLES LIKE 'usuarios'");
-    if ($check && $check->rowCount() > 0) {
+    // Consulta universal: si la tabla no existe, saltará al catch
+    $check = $pdo->query("SELECT 1 FROM usuarios LIMIT 1");
+    
+    if ($check) {
         $stmtAdmin = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE rol = 'admin'");
         if ($stmtAdmin->fetchColumn() == 0) { $needsInstall = true; }
-    } else { $needsInstall = true; }
-} catch (Exception $e) { $needsInstall = true; }
+    } else { 
+        $needsInstall = true; 
+    }
+} catch (Exception $e) { 
+    $needsInstall = true; 
+}
 
+// 4. CARGA DE USUARIO ACTUAL
 $currentUser = null;
 if (!$needsInstall && isset($_SESSION['user_id'])) {
     try {
@@ -41,6 +66,7 @@ if (!$needsInstall && isset($_SESSION['user_id'])) {
     } catch (Exception $e) { $currentUser = null; }
 }
 
+// 5. ENRUTAMIENTO (Acciones)
 $action = $_GET['action'] ?? 'home';
 
 if ($needsInstall) {
@@ -52,10 +78,10 @@ if ($needsInstall) {
 
 $is_dashboard = false;
 switch ($action) {
-    case 'install':              require 'controllers/install.php'; break;
+    case 'install':               require 'controllers/install.php'; break;
     case 'login':                require 'controllers/auth.php'; break;
     case 'recover':              require 'controllers/recover.php'; break;
-    case 'exportar_pdf':         require 'controllers/pdf_rubrica.php'; break; // Acción corregida
+    case 'exportar_pdf':         require 'controllers/pdf_rubrica.php'; break;
     case 'logout':               session_destroy(); header("Location: ?action=login"); exit;
     case 'usuarios':             require 'controllers/admin_users.php'; break;
     case 'gestion_clases_lista': require 'controllers/admin_classes.php'; break;
@@ -70,10 +96,12 @@ switch ($action) {
 
 $clean_content = ob_get_clean();
 
+// 6. RENDERIZADO DE VISTAS
 if (in_array($action, ['login', 'install', 'recover'])) {
     echo $clean_content;
 } else {
     if (file_exists('views/layout/header.php')) { require 'views/layout/header.php'; }
+    
     if ($is_dashboard) {
         $rol = $currentUser['rol'] ?? 'alumno';
         ?>
@@ -83,6 +111,7 @@ if (in_array($action, ['login', 'install', 'recover'])) {
                 <p class="text-muted">Bienvenido, <?= htmlspecialchars($currentUser['nombre'] ?? 'Usuario') ?>. Acceso rápido a las funciones de EasyRúbrica.</p>
             </div>
             <div class="row g-4 justify-content-center">
+                
                 <?php if($rol === 'admin'): ?>
                 <div class="col-6 col-md-4 col-lg-3">
                     <a href="?action=usuarios" class="text-decoration-none text-center d-block">
@@ -93,6 +122,7 @@ if (in_array($action, ['login', 'install', 'recover'])) {
                     </a>
                 </div>
                 <?php endif; ?>
+
                 <?php if($rol !== 'alumno'): ?>
                 <div class="col-6 col-md-4 col-lg-3">
                     <a href="?action=gestion_clases_lista" class="text-decoration-none text-center d-block">
@@ -119,6 +149,7 @@ if (in_array($action, ['login', 'install', 'recover'])) {
                     </a>
                 </div>
                 <?php endif; ?>
+
                 <div class="col-6 col-md-4 col-lg-3">
                     <a href="?action=evaluar" class="text-decoration-none text-center d-block">
                         <div class="card h-100 shadow-sm border-0 p-4 hover-card border-top border-4" style="border-color: #0dcaf0 !important;">
@@ -135,6 +166,7 @@ if (in_array($action, ['login', 'install', 'recover'])) {
                         </div>
                     </a>
                 </div>
+
                 <?php if($rol === 'admin'): ?>
                 <div class="col-6 col-md-4 col-lg-3">
                     <a href="?action=ajustes" class="text-decoration-none text-center d-block">
@@ -145,9 +177,13 @@ if (in_array($action, ['login', 'install', 'recover'])) {
                     </a>
                 </div>
                 <?php endif; ?>
+
             </div>
         </div>
         <?php
-    } else { echo $clean_content; }
+    } else { 
+        echo $clean_content; 
+    }
+
     if (file_exists('views/layout/footer.php')) { require 'views/layout/footer.php'; }
 }
