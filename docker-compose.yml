@@ -9,7 +9,7 @@ services:
       - DB_HOST=db
       - DB_NAME=easyrubrica
       - DB_USER=admin_user
-      - DB_PASS=On0jq7B9K0tMXwp3Cxzi
+      - DB_PASS=admin_pass
     depends_on:
       - db
     networks:
@@ -22,8 +22,8 @@ services:
     environment:
       - MYSQL_DATABASE=easyrubrica
       - MYSQL_USER=admin_user
-      - MYSQL_PASSWORD=On0jq7B9K0tMXwp3Cxzi
-      - MYSQL_ROOT_PASSWORD=LYuoiUKFG7kxHMD0NziL
+      - MYSQL_PASSWORD=admin_pass
+      - MYSQL_ROOT_PASSWORD=contrasena_segura_root
     volumes:
       - db_data:/var/lib/mysql
     networks:
