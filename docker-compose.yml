@@ -2,21 +2,36 @@ services:
   app:
     build: .
     container_name: easy-rubrica-app
+    restart: unless-stopped
     ports:
       - "8090:80"
     environment:
       - DB_HOST=db
-      - DB_NAME=easyrubrica  # <--- Debe ser igual a MYSQL_DATABASE
-      - DB_USER=admin_user   # <--- Debe ser igual a MYSQL_USER
-      - DB_PASS=admin_pass   # <--- Debe ser igual a MYSQL_PASSWORD
+      - DB_NAME=easyrubrica
+      - DB_USER=admin_user
+      - DB_PASS=On0jq7B9K0tMXwp3Cxzi
     depends_on:
       - db
+    networks:
+      - easy-network
 
   db:
     image: mariadb:10.6
     container_name: easy-rubrica-db
+    restart: unless-stopped
     environment:
-      - MYSQL_DATABASE=easyrubrica # <--- Debe ser igual a DB_NAME
-      - MYSQL_USER=admin_user      # <--- Debe ser igual a DB_USER
-      - MYSQL_PASSWORD=admin_pass  # <--- Debe ser igual a DB_PASS
-      - MYSQL_ROOT_PASSWORD=root_password_seguro # <--- Pon una password segura
+      - MYSQL_DATABASE=easyrubrica
+      - MYSQL_USER=admin_user
+      - MYSQL_PASSWORD=On0jq7B9K0tMXwp3Cxzi
+      - MYSQL_ROOT_PASSWORD=LYuoiUKFG7kxHMD0NziL
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - easy-network
+
+networks:
+  easy-network:
+    driver: bridge
+
+volumes:
+  db_data:
