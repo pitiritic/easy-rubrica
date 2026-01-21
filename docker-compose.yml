@@ -1,0 +1,22 @@
+services:
+  app:
+    build: .
+    container_name: easy-rubrica-app
+    ports:
+      - "8090:80"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=easyrubrica  # <--- Debe ser igual a MYSQL_DATABASE
+      - DB_USER=admin_user   # <--- Debe ser igual a MYSQL_USER
+      - DB_PASS=admin_pass   # <--- Debe ser igual a MYSQL_PASSWORD
+    depends_on:
+      - db
+
+  db:
+    image: mariadb:10.6
+    container_name: easy-rubrica-db
+    environment:
+      - MYSQL_DATABASE=easyrubrica # <--- Debe ser igual a DB_NAME
+      - MYSQL_USER=admin_user      # <--- Debe ser igual a DB_USER
+      - MYSQL_PASSWORD=admin_pass  # <--- Debe ser igual a DB_PASS
+      - MYSQL_ROOT_PASSWORD=root_password_seguro # <--- Pon una password segura

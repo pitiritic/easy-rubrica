@@ -1,0 +1,10 @@
+# No incluir historial de Git
+.git
+.github
+
+# No incluir archivos de desarrollo
+node_modules
+docker-compose.yml
+
+# IMPORTANTE: No incluir el db.php con contraseñas reales
+#easyrubrica/config/db.php

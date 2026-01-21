@@ -1,0 +1,6 @@
+# Ignorar configuración de base de datos local
+easyrubrica/config/db.php
+
+# Ignorar archivos temporales y basura
+*.old
+.DS_Store
