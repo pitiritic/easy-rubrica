@@ -1,6 +1,6 @@
 services:
   app:
-    build: .
+    image: ghcr.io/pitiritic/easy-rubrica:latest
     container_name: easy-rubrica-app
     restart: unless-stopped
     ports:
@@ -8,8 +8,8 @@ services:
     environment:
       - DB_HOST=db
       - DB_NAME=easyrubrica
-      - DB_USER=admin_user
-      - DB_PASS=admin_pass
+      - DB_USER=user_rubrica
+      - DB_PASS=pass_rubrica
     depends_on:
       - db
     networks:
@@ -21,9 +21,9 @@ services:
     restart: unless-stopped
     environment:
       - MYSQL_DATABASE=easyrubrica
-      - MYSQL_USER=admin_user
-      - MYSQL_PASSWORD=admin_pass
-      - MYSQL_ROOT_PASSWORD=contrasena_segura_root
+      - MYSQL_USER=user_rubrica
+      - MYSQL_PASSWORD=pass_rubrica
+      - MYSQL_ROOT_PASSWORD=root_password_seguro
     volumes:
       - db_data:/var/lib/mysql
     networks:
