@@ -1,15 +1,16 @@
 <?php
 // easyrubrica/controllers/ajustes.php
 
+// Verificación de seguridad: solo administradores
 if ($currentUser['rol'] != 'admin') die("Acceso denegado.");
 
 $mensaje = "";
 $error = "";
 
-// --- 0. PROCESAR ACCIONES SMTP ---
+// --- 0. PROCESAR ACCIONES POST ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
-    // A. GUARDAR CONFIGURACIÓN
+    // A. GUARDAR CONFIGURACIÓN SMTP
     if (isset($_POST['guardar_smtp'])) {
         try {
             $stmt = $pdo->prepare("UPDATE ajustes_smtp SET 
@@ -27,7 +28,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // B. PROBAR CONEXIÓN (TEST)
+    // B. NUEVO: GUARDAR AJUSTES DE SISTEMA (ENLACES DINÁMICOS)
+    if (isset($_POST['guardar_sistema'])) {
+        try {
+            $stmt = $pdo->prepare("UPDATE ajustes_sistema SET 
+                url_ayuda = ?, url_acerca = ? 
+                WHERE id = 1");
+            $stmt->execute([
+                trim($_POST['url_ayuda']), 
+                trim($_POST['url_acerca'])
+            ]);
+            $mensaje = "Enlaces del sistema actualizados correctamente.";
+        } catch (Exception $e) {
+            $error = "Error al guardar los enlaces: " . $e->getMessage();
+        }
+    }
+
+    // C. PROBAR CONEXIÓN SMTP (TEST)
     if (isset($_POST['test_smtp'])) {
         require 'libs/Exception.php';
         require 'libs/PHPMailer.php';
@@ -52,24 +69,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mail->Body    = "<h1>¡Éxito!</h1><p>Tu configuración SMTP en EasyRúbrica funciona correctamente.</p>";
 
             $mail->send();
-            $mensaje = "¡Test exitoso! Correo enviado a " . $_POST['smtp_user'] . "
-                <script>setTimeout(function(){ 
-                    let alert = document.querySelector('.alert-success');
-                    if(alert) { (new bootstrap.Alert(alert)).close(); }
-                }, 3000);</script>";
+            $mensaje = "¡Test exitoso! Correo enviado a " . $_POST['smtp_user'];
         } catch (Exception $e) {
             $error = "Fallo en el test: " . $mail->ErrorInfo;
         }
     }
 }
 
-// --- 1. GENERAR BACKUP DINÁMICO ---
+// --- 1. GENERAR BACKUP DINÁMICO (GET) ---
 if (isset($_GET['do']) && $_GET['do'] == 'backup') {
     if (ob_get_level()) ob_end_clean();
     
     $sql = "SET FOREIGN_KEY_CHECKS=0;\n\n";
     
-    // Consultar tablas que realmente existen para evitar el error 1146
     $stmtTables = $pdo->query("SHOW TABLES");
     $tables = $stmtTables->fetchAll(PDO::FETCH_COLUMN);
 
@@ -125,5 +137,12 @@ if (isset($_POST['reset_total'])) {
     } catch (PDOException $e) { $error = "Error en el reset: " . $e->getMessage(); }
 }
 
+// --- 4. CARGAR DATOS PARA LA VISTA ---
+// Recuperar configuración SMTP
 $smtp = $pdo->query("SELECT * FROM ajustes_smtp WHERE id = 1")->fetch();
+
+// Recuperar configuración de enlaces del sistema
+$sistema = $pdo->query("SELECT * FROM ajustes_sistema WHERE id = 1")->fetch();
+
+// Cargar la vista
 require 'views/ajustes.view.php';

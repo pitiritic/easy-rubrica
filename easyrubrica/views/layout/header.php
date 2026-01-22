@@ -1,3 +1,8 @@
+<?php
+// Obtener ajustes del sistema para los enlaces dinámicos
+$stmtSis = $pdo->query("SELECT url_ayuda, url_acerca FROM ajustes_sistema WHERE id = 1");
+$ajustes_sis = $stmtSis->fetch();
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -11,16 +16,17 @@
         .nav-link { color: #0d6efd !important; font-weight: 500; transition: color 0.2s ease; }
         .nav-link:hover { color: #6c757d !important; }
 
-        /* NUEVOS COLORES COORDINADOS */
-        .icon-home { color: #ff8c00; }    /* Naranja oscuro (Casa) */
-        .icon-ajustes { color: #212529; } /* Gris oscuro */
-        .icon-rubricas { color: #d63384; } /* Magenta/Rosa (Rúbricas) */
-        .icon-clases { color: #198754; }   /* Verde */
-        .icon-asignar { color: #ffc107; }  /* Amarillo/Ocre */
-        .icon-evaluar { color: #0dcaf0; }  /* Cian */
-        .icon-notas { color: #6610f2; }    /* Violeta */
+        .icon-home { color: #ff8c00; }    
+        .icon-ajustes { color: #212529; } 
+        .icon-rubricas { color: #d63384; } 
+        .icon-usuarios { color: #ff8c00; } /* Color naranja para Usuarios */
+        .icon-clases { color: #198754; }   
+        .icon-asignar { color: #ffc107; }  
+        .icon-evaluar { color: #0dcaf0; }  
+        .icon-notas { color: #6610f2; }    
 
         .nav-link i { margin-right: 5px; }
+        .dropdown-item i { width: 25px; }
     </style>
 </head>
 <body class="bg-light">
@@ -57,6 +63,15 @@
                         <i class="fa-solid fa-list icon-rubricas"></i> Rúbricas
                     </a>
                 </li>
+                
+                <?php if($currentUser['rol'] === 'admin'): ?>
+                <li class="nav-item">
+                    <a class="nav-link" href="index.php?action=usuarios">
+                        <i class="fa-solid fa-users icon-usuarios"></i> Usuarios
+                    </a>
+                </li>
+                <?php endif; ?>
+
                 <li class="nav-item">
                     <a class="nav-link" href="index.php?action=gestion_clases_lista">
                         <i class="fa-solid fa-chalkboard-user icon-clases"></i> Clases
@@ -90,7 +105,24 @@
                     <ul class="dropdown-menu dropdown-menu-end shadow border-0">
                         <li><span class="dropdown-item-text small text-muted text-uppercase fw-bold"><?= htmlspecialchars($currentUser['rol'] ?? 'Sin rol') ?></span></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger" href="index.php?action=logout"><i class="fa-solid fa-right-from-bracket me-2"></i>Cerrar Sesión</a></li>
+                        
+                        <li>
+                            <a class="dropdown-item" href="<?= htmlspecialchars($ajustes_sis['url_ayuda'] ?? '#') ?>" target="_blank">
+                                <i class="fa-solid fa-circle-question text-info me-2"></i>Ayuda y recursos
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="<?= htmlspecialchars($ajustes_sis['url_acerca'] ?? '#') ?>" target="_blank">
+                                <i class="fa-solid fa-circle-info text-secondary me-2"></i>Acerca de
+                            </a>
+                        </li>
+
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-danger" href="index.php?action=logout">
+                                <i class="fa-solid fa-right-from-bracket me-2"></i>Cerrar Sesión
+                            </a>
+                        </li>
                     </ul>
                 </li>
             </ul>
