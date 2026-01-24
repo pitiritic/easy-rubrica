@@ -14,16 +14,14 @@ $options = [
     PDO::ATTR_EMULATE_PREPARES   => false,
 ];
 
-// Inicialización para evitar el error de "Undefined variable $pdo" en index.php
 $pdo = null;
 
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
-    // Intentar seleccionar la base de datos si ya existe
     $pdo->exec("USE `$db` ");
     checkAndMigrate($pdo);
 } catch (\PDOException $e) {
-    // Si la conexión falla, $pdo queda como null y index.php activa el instalador
+    // Error silencioso para que index.php active el instalador
 }
 
 function checkAndMigrate($pdo) {
@@ -32,14 +30,27 @@ function checkAndMigrate($pdo) {
         $stmt = $pdo->query("DESCRIBE usuarios");
         $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
         
+        // Migración: reset_token
         if (!in_array('reset_token', $columns)) {
             $pdo->exec("ALTER TABLE usuarios ADD COLUMN reset_token VARCHAR(255) NULL AFTER password");
         }
+        // Migración: reset_expires
         if (!in_array('reset_expires', $columns)) {
             $pdo->exec("ALTER TABLE usuarios ADD COLUMN reset_expires DATETIME NULL AFTER reset_token");
         }
+        // NUEVA MIGRACIÓN: creador_id para instalaciones existentes
+        if (!in_array('creador_id', $columns)) {
+            $pdo->exec("ALTER TABLE usuarios ADD COLUMN creador_id INT NULL");
+            
+            // Asignar los huérfanos al primer admin que encuentre
+            $stmtAdmin = $pdo->query("SELECT id FROM usuarios WHERE rol = 'admin' LIMIT 1");
+            $adminId = $stmtAdmin->fetchColumn();
+            if ($adminId) {
+                $pdo->prepare("UPDATE usuarios SET creador_id = ? WHERE creador_id IS NULL")->execute([$adminId]);
+            }
+        }
 
-        // Tabla para configuración de correo
+        // Tablas de ajustes (SMTP y Sistema)
         $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_smtp (
             id INT PRIMARY KEY,
             smtp_host VARCHAR(100),
@@ -50,16 +61,13 @@ function checkAndMigrate($pdo) {
             from_email VARCHAR(100),
             from_name VARCHAR(100) DEFAULT 'EasyRúbrica'
         ) ENGINE=InnoDB");
-
         $pdo->exec("INSERT IGNORE INTO ajustes_smtp (id, from_name) VALUES (1, 'EasyRúbrica')");
 
-        // NUEVA TABLA: Ajustes generales del sistema (URLs de ayuda y recursos)
         $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_sistema (
             id INT PRIMARY KEY,
             url_ayuda VARCHAR(255) DEFAULT '#',
             url_acerca VARCHAR(255) DEFAULT '#'
         ) ENGINE=InnoDB");
-
         $pdo->exec("INSERT IGNORE INTO ajustes_sistema (id) VALUES (1)");
 
     } catch (Exception $e) {}
@@ -71,6 +79,7 @@ function installDB($pdo) {
     
     $pdo->exec("USE `$db` ");
 
+    // Se añade creador_id directamente en la creación inicial
     $pdo->exec("CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
         usuario VARCHAR(50) UNIQUE NOT NULL,
@@ -79,7 +88,8 @@ function installDB($pdo) {
         email VARCHAR(100),
         rol ENUM('admin', 'profesor', 'alumno') DEFAULT 'alumno',
         reset_token VARCHAR(255) NULL,
-        reset_expires DATETIME NULL
+        reset_expires DATETIME NULL,
+        creador_id INT NULL
     ) ENGINE=InnoDB;");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS clases (
@@ -168,7 +178,6 @@ function installDB($pdo) {
         FOREIGN KEY (nivel_id) REFERENCES niveles(id) ON DELETE CASCADE
     ) ENGINE=InnoDB;");
 
-    // Configuración SMTP
     $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_smtp (
         id INT PRIMARY KEY,
         smtp_host VARCHAR(100),
@@ -179,15 +188,12 @@ function installDB($pdo) {
         from_email VARCHAR(100),
         from_name VARCHAR(100) DEFAULT 'EasyRúbrica'
     ) ENGINE=InnoDB;");
-
     $pdo->exec("INSERT IGNORE INTO ajustes_smtp (id, from_name) VALUES (1, 'EasyRúbrica')");
 
-    // Configuración General (Ayuda / Acerca de)
     $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_sistema (
         id INT PRIMARY KEY,
         url_ayuda VARCHAR(255) DEFAULT '#',
         url_acerca VARCHAR(255) DEFAULT '#'
     ) ENGINE=InnoDB");
-
     $pdo->exec("INSERT IGNORE INTO ajustes_sistema (id) VALUES (1)");
 }

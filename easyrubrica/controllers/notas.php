@@ -10,8 +10,9 @@ $mensaje = "";
 $error = "";
 $vista_actual = $_GET['vista'] ?? 'por_tarea';
 $userId = (int)$_SESSION['user_id'];
+$is_print_mode = isset($_GET['export_pdf']);
 
-// --- 1. LÓGICA DE EXPORTACIÓN CSV (Protegida) ---
+// --- 1. LÓGICA DE EXPORTACIÓN CSV ---
 if (isset($_GET['export_csv']) && $currentUser['rol'] !== 'alumno') {
     $tipo_export = $_GET['tipo_export']; 
     $id_export = (int)$_GET['export_csv'];
@@ -36,15 +37,10 @@ if (isset($_GET['export_csv']) && $currentUser['rol'] !== 'alumno') {
     fclose($output); exit;
 }
 
-// --- 2. OBTENCIÓN DE DATOS SEGÚN ROL ---
-
-$notas_agrupadas = []; // Variable que espera la vista
+// --- 2. OBTENCIÓN DE DATOS ---
+$notas_agrupadas = []; 
 
 if ($currentUser['rol'] === 'alumno') {
-    /**
-     * VISTA ALUMNO: Adaptamos los datos al formato de la vista (bloques)
-     * pero anonimizamos los evaluadores.
-     */
     $sql = "SELECT e.*, cr.titulo as tarea_nombre, r.nombre as rubrica_nombre, c.nombre as clase_nombre
             FROM evaluaciones e
             LEFT JOIN clase_rubrica cr ON e.tarea_id = cr.id
@@ -70,21 +66,17 @@ if ($currentUser['rol'] === 'alumno') {
         if (!isset($notas_agrupadas[$key]['subbloques'][$sub_key])) {
             $notas_agrupadas[$key]['subbloques'][$sub_key] = [
                 'titulo_principal' => $n['rubrica_nombre'] ?? 'Rúbrica',
-                'evaluaciones' => []
+                'evaluaciones' => [],
+                'suma_notas' => 0,
+                'total_evals' => 0
             ];
         }
-        
-        // PRIVACIDAD: Sobrescribimos datos sensibles antes de enviarlos a la vista
-        $n['evaluador_id'] = 0; // Para que la vista no lo reconozca como "Tú mismo"
         $n['evaluador_nombre'] = "Evaluación recibida"; 
-        
         $notas_agrupadas[$key]['subbloques'][$sub_key]['evaluaciones'][] = $n;
+        $notas_agrupadas[$key]['subbloques'][$sub_key]['suma_notas'] += $n['calificacion_final'];
+        $notas_agrupadas[$key]['subbloques'][$sub_key]['total_evals']++;
     }
-
 } else {
-    /**
-     * VISTA PROFESOR / ADMIN: Solo ven sus propias tareas (cr.autor_id).
-     */
     $sql = "SELECT e.*, cr.titulo as tarea_nombre, r.nombre as rubrica_nombre, c.nombre as clase_nombre,
                    u_evaluado.nombre as alumno_nombre, u_evaluador.nombre as evaluador_nombre
             FROM evaluaciones e
@@ -93,11 +85,21 @@ if ($currentUser['rol'] === 'alumno') {
             JOIN clases c ON cr.clase_id = c.id
             JOIN usuarios u_evaluado ON e.evaluado_id = u_evaluado.id
             JOIN usuarios u_evaluador ON e.evaluador_id = u_evaluador.id
-            WHERE cr.autor_id = ?
-            ORDER BY u_evaluado.nombre ASC, cr.titulo ASC";
-            
+            WHERE cr.autor_id = ?";
+    
+    $params = [$userId];
+
+    // Si es modo PDF, filtramos por el ID específico
+    if ($is_print_mode) {
+        $id_target = (int)$_GET['export_pdf'];
+        $tipo_target = $_GET['tipo_export'];
+        $sql .= ($tipo_target === 'tarea') ? " AND e.tarea_id = ?" : " AND e.evaluado_id = ?";
+        $params[] = $id_target;
+    }
+
+    $sql .= " ORDER BY u_evaluado.nombre ASC, cr.titulo ASC";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$userId]);
+    $stmt->execute($params);
     $raw_notas = $stmt->fetchAll();
     
     foreach ($raw_notas as $n) {
@@ -115,10 +117,14 @@ if ($currentUser['rol'] === 'alumno') {
             $notas_agrupadas[$key]['subbloques'][$sub_key] = [
                 'titulo_principal' => ($vista_actual === 'por_alumno') ? $n['tarea_nombre'] : $n['alumno_nombre'],
                 'rubrica_nombre' => $n['rubrica_nombre'],
-                'evaluaciones' => []
+                'evaluaciones' => [],
+                'suma_notas' => 0,
+                'total_evals' => 0
             ];
         }
         $notas_agrupadas[$key]['subbloques'][$sub_key]['evaluaciones'][] = $n;
+        $notas_agrupadas[$key]['subbloques'][$sub_key]['suma_notas'] += $n['calificacion_final'];
+        $notas_agrupadas[$key]['subbloques'][$sub_key]['total_evals']++;
     }
 }
 

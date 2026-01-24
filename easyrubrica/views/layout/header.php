@@ -1,7 +1,5 @@
 <?php
-// Obtener ajustes del sistema para los enlaces dinámicos
-$stmtSis = $pdo->query("SELECT url_ayuda, url_acerca FROM ajustes_sistema WHERE id = 1");
-$ajustes_sis = $stmtSis->fetch();
+// Los ajustes ya vienen cargados desde index.php en la variable $ajustes_sis
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -19,7 +17,7 @@ $ajustes_sis = $stmtSis->fetch();
         .icon-home { color: #ff8c00; }    
         .icon-ajustes { color: #212529; } 
         .icon-rubricas { color: #d63384; } 
-        .icon-usuarios { color: #ff8c00; } /* Color naranja para Usuarios */
+        .icon-usuarios { color: #ff8c00; } 
         .icon-clases { color: #198754; }   
         .icon-asignar { color: #ffc107; }  
         .icon-evaluar { color: #0dcaf0; }  
@@ -64,7 +62,7 @@ $ajustes_sis = $stmtSis->fetch();
                     </a>
                 </li>
                 
-                <?php if($currentUser['rol'] === 'admin'): ?>
+                <?php if($currentUser['rol'] === 'admin' || $currentUser['rol'] === 'profesor'): ?>
                 <li class="nav-item">
                     <a class="nav-link" href="index.php?action=usuarios">
                         <i class="fa-solid fa-users icon-usuarios"></i> Usuarios
@@ -107,12 +105,12 @@ $ajustes_sis = $stmtSis->fetch();
                         <li><hr class="dropdown-divider"></li>
                         
                         <li>
-                            <a class="dropdown-item" href="<?= htmlspecialchars($ajustes_sis['url_ayuda'] ?? '#') ?>" target="_blank">
+                            <a class="dropdown-item" href="<?= htmlspecialchars($ajustes_sis['url_ayuda']) ?>" target="_blank">
                                 <i class="fa-solid fa-circle-question text-info me-2"></i>Ayuda y recursos
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="<?= htmlspecialchars($ajustes_sis['url_acerca'] ?? '#') ?>" target="_blank">
+                            <a class="dropdown-item" href="<?= htmlspecialchars($ajustes_sis['url_acerca']) ?>" target="_blank">
                                 <i class="fa-solid fa-circle-info text-secondary me-2"></i>Acerca de
                             </a>
                         </li>

@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 WHERE id = 1");
             $stmt->execute([
                 trim($_POST['smtp_host']), trim($_POST['smtp_user']), $_POST['smtp_pass'],
-                (int)$_POST['smtp_port'], $_POST['smtp_secure'], 
+                (int)$_POST['smtp_port'], $_POST['smtp_secure'],
                 trim($_POST['from_email']), trim($_POST['from_name'])
             ]);
             $mensaje = "Configuración SMTP actualizada correctamente.";
@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // B. NUEVO: GUARDAR AJUSTES DE SISTEMA (ENLACES DINÁMICOS)
+    // B. GUARDAR AJUSTES DE SISTEMA (ENLACES DINÁMICOS)
     if (isset($_POST['guardar_sistema'])) {
         try {
             $stmt = $pdo->prepare("UPDATE ajustes_sistema SET 
@@ -94,8 +94,8 @@ if (isset($_GET['do']) && $_GET['do'] == 'backup') {
         $stmtData = $pdo->query("SELECT * FROM `$table` ");
         while ($row = $stmtData->fetch(PDO::FETCH_ASSOC)) {
             $keys = array_map(function($k){ return "`$k`"; }, array_keys($row));
-            $vals = array_map(function($v) use ($pdo){ 
-                return $v === null ? 'NULL' : $pdo->quote($v); 
+            $vals = array_map(function($v) use ($pdo){
+                return $v === null ? 'NULL' : $pdo->quote($v);
             }, array_values($row));
             
             $sql .= "INSERT INTO `$table` (" . implode(', ', $keys) . ") VALUES (" . implode(', ', $vals) . ");\n";
@@ -143,6 +143,23 @@ $smtp = $pdo->query("SELECT * FROM ajustes_smtp WHERE id = 1")->fetch();
 
 // Recuperar configuración de enlaces del sistema
 $sistema = $pdo->query("SELECT * FROM ajustes_sistema WHERE id = 1")->fetch();
+
+/**
+ * LÓGICA DE VALORES POR DEFECTO REFORZADA
+ * Si la base de datos no tiene la fila, o si los campos están vacíos o contienen '#', 
+ * se asignan las URLs solicitadas.
+ */
+if (!$sistema) {
+    $sistema = ['url_ayuda' => '', 'url_acerca' => ''];
+}
+
+if (empty($sistema['url_ayuda']) || $sistema['url_ayuda'] == '#') {
+    $sistema['url_ayuda'] = 'https://jmmorenas.com/easy-rubrica/ayuda-y-recursos.html';
+}
+
+if (empty($sistema['url_acerca']) || $sistema['url_acerca'] == '#') {
+    $sistema['url_acerca'] = 'https://github.com/pitiritic/easy-rubrica';
+}
 
 // Cargar la vista
 require 'views/ajustes.view.php';

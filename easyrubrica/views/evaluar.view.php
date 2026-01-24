@@ -59,8 +59,7 @@
                             </select>
                         </div>
 
-                        <div id="criterios_container">
-                            </div>
+                        <div id="criterios_container"></div>
 
                         <div class="d-grid mt-3">
                             <button type="submit" class="btn btn-success fw-bold shadow-sm" name="guardar_evaluacion">
@@ -75,6 +74,9 @@
 </div>
 
 <script>
+// Obtenemos el ID del usuario actual desde PHP para JS
+const currentUserId = <?= json_encode($_SESSION['user_id']) ?>;
+
 function seleccionarTarea(tareaId, rubricaId, titulo) {
     document.getElementById('welcome_message').style.display = 'none';
     document.getElementById('eval_form_container').style.display = 'block';
@@ -82,7 +84,7 @@ function seleccionarTarea(tareaId, rubricaId, titulo) {
     document.getElementById('input_tarea_id').value = tareaId;
     document.getElementById('input_rubrica_id').value = rubricaId;
     
-    // Carga de alumnos
+    // Carga de alumnos con aviso de autoevaluación
     fetch('api/get_alumnos.php?tarea_id=' + tareaId)
         .then(res => res.json())
         .then(data => {
@@ -91,13 +93,15 @@ function seleccionarTarea(tareaId, rubricaId, titulo) {
                 html = '<option value="">No hay alumnos pendientes</option>';
             } else {
                 data.forEach(a => {
-                    html += `<option value="${a.id}">${a.nombre}</option>`;
+                    // CAMBIO: Aviso si el alumno es el propio usuario
+                    let aviso = (a.id == currentUserId) ? ' (ERES TÚ - AUTOEVALUACIÓN)' : '';
+                    html += `<option value="${a.id}">${a.nombre}${aviso}</option>`;
                 });
             }
             document.getElementById('select_alumno').innerHTML = html;
         });
 
-    // Carga de rúbrica
+    // Carga de rúbrica (igual que antes)
     const container = document.getElementById('criterios_container');
     container.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
 

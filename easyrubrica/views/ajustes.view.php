@@ -66,7 +66,7 @@
                                 <div class="input-group">
                                     <span class="input-group-text bg-light"><i class="fa-solid fa-circle-question text-info"></i></span>
                                     <input type="url" name="url_ayuda" class="form-control" 
-                                           value="<?= htmlspecialchars($sistema['url_ayuda'] ?? '') ?>" 
+                                           value="<?= htmlspecialchars($sistema['url_ayuda']) ?>" 
                                            placeholder="https://tuweb.com/ayuda">
                                 </div>
                             </div>
@@ -75,7 +75,7 @@
                                 <div class="input-group">
                                     <span class="input-group-text bg-light"><i class="fa-solid fa-circle-info text-secondary"></i></span>
                                     <input type="url" name="url_acerca" class="form-control" 
-                                           value="<?= htmlspecialchars($sistema['url_acerca'] ?? '') ?>" 
+                                           value="<?= htmlspecialchars($sistema['url_acerca']) ?>" 
                                            placeholder="https://tuweb.com/acerca">
                                 </div>
                             </div>

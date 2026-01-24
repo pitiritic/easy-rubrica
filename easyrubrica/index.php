@@ -7,29 +7,51 @@ ob_start();
 session_start();
 
 // 1. CARGA DE CONFIGURACIÓN
-// Usamos require_once para asegurar que el archivo existe
 require_once 'config/db.php';
 
-// 2. PROTECCIÓN ANTI-NULL (Evita el Fatal Error en instalaciones nuevas)
-if (!isset($pdo)) {
-    if (isset($db)) { 
+// 2. VALIDACIÓN DE CONEXIÓN (Evita el Fatal Error de "string")
+// Nos aseguramos de que $pdo sea un objeto antes de usarlo
+if (!isset($pdo) || !is_object($pdo)) {
+    if (isset($db) && is_object($db)) { 
         $pdo = $db; 
     } else {
-        // Si no existe la variable de conexión, detenemos con un mensaje amigable
         die("<div style='font-family:sans-serif; padding:50px; text-align:center;'>
-                <h2>⚠️ Error de Configuración</h2>
-                <p>No se detecta la conexión a la base de datos en <b>config/db.php</b>.</p>
-                <p>Verifica que la variable de conexión se llame <code>\$pdo</code>.</p>
+                <h2>⚠️ Error de Conexión</h2>
+                <p>La conexión a la base de datos no se ha establecido correctamente en <b>config/db.php</b>.</p>
              </div>");
     }
 }
 
-// --- GESTIÓN DE DESCARGA DIRECTA ---
+// 3. CARGA GLOBAL DE ENLACES (Para Ayuda y Acerca de)
+try {
+    $stmtSis = $pdo->query("SELECT url_ayuda, url_acerca FROM ajustes_sistema WHERE id = 1");
+    $ajustes_sis = $stmtSis->fetch(PDO::FETCH_ASSOC);
+
+    if (!$ajustes_sis) { 
+        $ajustes_sis = ['url_ayuda' => '', 'url_acerca' => '']; 
+    }
+    
+    // Aplicamos las URLs por defecto solicitadas si el campo está vacío o tiene '#'
+    if (empty($ajustes_sis['url_ayuda']) || $ajustes_sis['url_ayuda'] == '#') {
+        $ajustes_sis['url_ayuda'] = 'https://jmmorenas.com/easy-rubrica/ayuda-y-recursos.html';
+    }
+    if (empty($ajustes_sis['url_acerca']) || $ajustes_sis['url_acerca'] == '#') {
+        $ajustes_sis['url_acerca'] = 'https://github.com/pitiritic/easy-rubrica';
+    }
+} catch (Exception $e) {
+    // Fallback si la tabla no existe o hay error en la consulta
+    $ajustes_sis = [
+        'url_ayuda' => 'https://jmmorenas.com/easy-rubrica/ayuda-y-recursos.html',
+        'url_acerca' => 'https://github.com/pitiritic/easy-rubrica'
+    ];
+}
+
+// 4. GESTIÓN DE DESCARGA DIRECTA (Plantilla Rúbrica)
 if (isset($_GET['action']) && $_GET['action'] === 'descargar_plantilla_rubrica') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename=plantilla_rubrica.csv');
     $output = fopen('php://output', 'w');
-    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM UTF-8
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF)); 
     fputcsv($output, array('Nombre Rubrica', 'Descripcion', 'Asignatura', 'Competencias', 'Criterio', 'Nivel 1 (Insuficiente)', 'Nivel 2 (Aceptable)', 'Nivel 3 (Bueno)', 'Nivel 4 (Excelente)'));
     $ejemplos = array(
         array('Resolución de Problemas', 'Evaluación del proceso lógico', 'Matemáticas', 'Matemática,Científica', 'Comprensión del enunciado', 'No entiende el problema.', 'Entiende parte.', 'Identifica la mayoría.', 'Identifica todos los datos.'),
@@ -40,12 +62,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'descargar_plantilla_rubrica')
     exit;
 }
 
-// 3. DETECCIÓN DE INSTALACIÓN (Compatible con SQLite y MariaDB)
+// 5. DETECCIÓN DE INSTALACIÓN
 $needsInstall = false;
 try {
-    // Consulta universal: si la tabla no existe, saltará al catch
     $check = $pdo->query("SELECT 1 FROM usuarios LIMIT 1");
-    
     if ($check) {
         $stmtAdmin = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE rol = 'admin'");
         if ($stmtAdmin->fetchColumn() == 0) { $needsInstall = true; }
@@ -56,7 +76,7 @@ try {
     $needsInstall = true; 
 }
 
-// 4. CARGA DE USUARIO ACTUAL
+// 6. CARGA DE USUARIO ACTUAL
 $currentUser = null;
 if (!$needsInstall && isset($_SESSION['user_id'])) {
     try {
@@ -66,7 +86,7 @@ if (!$needsInstall && isset($_SESSION['user_id'])) {
     } catch (Exception $e) { $currentUser = null; }
 }
 
-// 5. ENRUTAMIENTO (Acciones)
+// 7. ENRUTAMIENTO
 $action = $_GET['action'] ?? 'home';
 
 if ($needsInstall) {
@@ -96,10 +116,11 @@ switch ($action) {
 
 $clean_content = ob_get_clean();
 
-// 6. RENDERIZADO DE VISTAS
+// 8. RENDERIZADO DE VISTAS
 if (in_array($action, ['login', 'install', 'recover'])) {
     echo $clean_content;
 } else {
+    // El header usará automáticamente la variable $ajustes_sis cargada en el punto 3
     if (file_exists('views/layout/header.php')) { require 'views/layout/header.php'; }
     
     if ($is_dashboard) {
@@ -112,7 +133,7 @@ if (in_array($action, ['login', 'install', 'recover'])) {
             </div>
             <div class="row g-4 justify-content-center">
                 
-                <?php if($rol === 'admin'): ?>
+                <?php if($rol === 'admin' || $rol === 'profesor'): ?>
                 <div class="col-6 col-md-4 col-lg-3">
                     <a href="?action=usuarios" class="text-decoration-none text-center d-block">
                         <div class="card h-100 shadow-sm border-0 p-4 hover-card border-top border-4" style="border-color: #ff8c00 !important;">

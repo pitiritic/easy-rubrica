@@ -48,7 +48,9 @@
 
     <?php if($vista_actual === 'grid'): ?>
         <div class="row g-4" id="contenedorClases">
-            <?php foreach ($clases as $clase): ?>
+            <?php foreach ($clases as $clase): 
+                $es_propia = ($clase['autor_id'] == $currentUser['id'] || $currentUser['rol'] === 'admin');
+            ?>
                 <div class="col-md-6 col-lg-4 clase-card">
                     <div class="card h-100 shadow-sm border-0 border-top border-success border-4">
                         <div class="card-body">
@@ -66,24 +68,30 @@
                                 foreach($alumnos as $alu): ?>
                                     <div class="d-flex justify-content-between border-bottom py-1">
                                         <span><?= htmlspecialchars($alu['nombre']) ?></span>
+                                        <?php if($es_propia): ?>
                                         <form method="POST" onsubmit="return confirm('¿Quitar alumno de la clase?');">
                                             <input type="hidden" name="eliminar_vinculo" value="1">
                                             <input type="hidden" name="clase_id" value="<?= $clase['id'] ?>">
                                             <input type="hidden" name="usuario_id" value="<?= $alu['id'] ?>">
                                             <button type="submit" class="btn btn-link p-0 text-danger" style="font-size: 0.7rem;"><i class="fa-solid fa-trash"></i></button>
                                         </form>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
 
                             <div class="d-flex gap-1">
-                                <button class="btn btn-outline-primary btn-sm flex-fill" onclick="abrirVincular(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')" title="Vincular Alumno"><i class="fa-solid fa-user-plus"></i></button>
-                                <button class="btn btn-outline-warning btn-sm flex-fill" onclick="abrirClonar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')" title="Clonar Clase"><i class="fa-solid fa-copy"></i></button>
-                                <button class="btn btn-outline-secondary btn-sm flex-fill" onclick="abrirEditar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')" title="Editar Nombre"><i class="fa-solid fa-pen"></i></button>
-                                <form method="POST" class="flex-fill" onsubmit="return confirm('¿Eliminar esta clase definitivamente?');">
-                                    <input type="hidden" name="eliminar_clase" value="1"><input type="hidden" name="clase_id" value="<?= $clase['id'] ?>">
-                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100" title="Eliminar Clase"><i class="fa-solid fa-trash"></i></button>
-                                </form>
+                                <?php if($es_propia): ?>
+                                    <button class="btn btn-outline-primary btn-sm flex-fill" onclick="abrirVincular(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')" title="Vincular Alumno"><i class="fa-solid fa-user-plus"></i></button>
+                                    <button class="btn btn-outline-warning btn-sm flex-fill" onclick="abrirClonar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')" title="Clonar Clase"><i class="fa-solid fa-copy"></i></button>
+                                    <button class="btn btn-outline-secondary btn-sm flex-fill" onclick="abrirEditar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')" title="Editar Nombre"><i class="fa-solid fa-pen"></i></button>
+                                    <form method="POST" class="flex-fill" onsubmit="return confirm('¿Eliminar esta clase definitivamente?');">
+                                        <input type="hidden" name="eliminar_clase" value="1"><input type="hidden" name="clase_id" value="<?= $clase['id'] ?>">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm w-100" title="Eliminar Clase"><i class="fa-solid fa-trash"></i></button>
+                                    </form>
+                                <?php else: ?>
+                                    <button class="btn btn-outline-warning btn-sm w-100" onclick="abrirClonar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')" title="Clonar para mí"><i class="fa-solid fa-copy me-2"></i>Clonar para mí</button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -103,19 +111,25 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($clases as $clase): ?>
+                        <?php foreach ($clases as $clase): 
+                            $es_propia = ($clase['autor_id'] == $currentUser['id'] || $currentUser['rol'] === 'admin');
+                        ?>
                             <tr class="clase-fila">
                                 <td class="fw-bold nombre-clase"><?= htmlspecialchars($clase['nombre']) ?></td>
                                 <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($clase['autor_nombre']) ?></span></td>
                                 <td class="text-center"><?= $clase['num_alumnos'] ?></td>
                                 <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-primary" onclick="abrirVincular(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')"><i class="fa-solid fa-user-plus"></i></button>
-                                    <button class="btn btn-sm btn-outline-warning" onclick="abrirClonar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')"><i class="fa-solid fa-copy"></i></button>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="abrirEditar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')"><i class="fa-solid fa-pen"></i></button>
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('¿Eliminar?');">
-                                        <input type="hidden" name="eliminar_clase" value="1"><input type="hidden" name="clase_id" value="<?= $clase['id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
-                                    </form>
+                                    <?php if($es_propia): ?>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="abrirVincular(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')"><i class="fa-solid fa-user-plus"></i></button>
+                                        <button class="btn btn-sm btn-outline-warning" onclick="abrirClonar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')"><i class="fa-solid fa-copy"></i></button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="abrirEditar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')"><i class="fa-solid fa-pen"></i></button>
+                                        <form method="POST" style="display:inline;" onsubmit="return confirm('¿Eliminar?');">
+                                            <input type="hidden" name="eliminar_clase" value="1"><input type="hidden" name="clase_id" value="<?= $clase['id'] ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                                        </form>
+                                    <?php else: ?>
+                                        <button class="btn btn-sm btn-outline-warning" onclick="abrirClonar(<?= $clase['id'] ?>, '<?= htmlspecialchars($clase['nombre']) ?>')"><i class="fa-solid fa-copy me-1"></i> Clonar</button>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -251,7 +265,6 @@
 </style>
 
 <script>
-// Filtrado instantáneo
 function filtrarClases() {
     const query = document.getElementById('inputBuscarClase').value.toLowerCase();
     document.querySelectorAll('.clase-card').forEach(card => {
@@ -264,7 +277,6 @@ function filtrarClases() {
     });
 }
 
-// Funciones para abrir modales y pasar datos
 function abrirEditar(id, nombre) {
     const modal = new bootstrap.Modal(document.getElementById('modalEditar'));
     document.getElementById('edit_clase_id').value = id;
