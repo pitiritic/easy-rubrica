@@ -18,31 +18,25 @@
     </div>
 
     <?php if($currentUser['rol'] === 'alumno'): ?>
-        <div class="card shadow-sm border-0">
+        <div class="card shadow-sm border-0 d-print-none">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="bg-primary text-white">
                         <tr>
                             <th class="ps-4">Tarea / Actividad</th>
                             <th>Clase</th>
-                            <th class="text-center" style="width: 120px;">Nota Final</th>
-                            <th class="text-end pe-4 d-print-none" style="width: 120px;">Estado</th>
+                            <th class="text-center" style="width: 120px;">Nota</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach($notas_agrupadas as $id_p => $bloque): 
-                             $total_b = 0; $count_b = 0;
-                             foreach($bloque['subbloques'] as $sb) { $total_b += $sb['suma_notas']; $count_b += $sb['total_evals']; }
-                             $nota_media = $count_b > 0 ? $total_b / $count_b : 0;
-                        ?>
+                        <?php foreach($notas_agrupadas as $n): ?>
                             <tr>
-                                <td class="ps-4 fw-bold"><?= htmlspecialchars($bloque['nombre']) ?></td>
-                                <td><span class="text-muted small"><?= htmlspecialchars($bloque['extra']) ?></span></td>
-                                <td class="text-center fw-bold <?= $nota_media >= 5 ? 'text-success' : 'text-danger' ?>">
-                                    <?= number_format($nota_media, 2) ?>
-                                </td>
-                                <td class="text-end pe-4 d-print-none">
-                                    <span class="badge bg-success-subtle text-success border">Evaluada</span>
+                                <td class="ps-4 fw-bold"><?= htmlspecialchars($n['nombre']) ?></td>
+                                <td><?= htmlspecialchars($n['extra']) ?></td>
+                                <td class="text-center">
+                                    <?php foreach($n['subbloques'] as $sub): ?>
+                                        <span class="badge bg-primary fs-6 px-3"><?= number_format($sub['suma_notas'] / $sub['total_evals'], 2) ?></span>
+                                    <?php endforeach; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -96,18 +90,29 @@
                                         <table class="table table-sm table-hover mb-0 align-middle">
                                             <thead class="table-light x-small">
                                                 <tr>
-                                                    <th class="ps-3">Evaluador</th>
-                                                    <th style="width: 120px; text-align: center;">Tipo</th>
-                                                    <th style="width: 100px; text-align: center;">Nota</th>
-                                                    <th class="text-end pe-3" style="width: 100px;">Fecha</th>
+                                                    <th class="ps-3">EVALUADOR</th>
+                                                    <th class="text-center" style="width: 120px;">TIPO</th>
+                                                    <th class="text-center" style="width: 100px;">NOTA</th>
+                                                    <th class="text-end pe-3" style="width: 100px;">FECHA</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <?php foreach($sub['evaluaciones'] as $ev): ?>
                                                     <tr>
-                                                        <td class="ps-3 fw-bold small"><?= htmlspecialchars($ev['evaluador_nombre']) ?></td>
-                                                        <td style="width: 120px; text-align: center;">
-                                                            <span class="badge bg-info small fw-normal d-inline-block" style="width: 70px;"><?= ucfirst($ev['tipo']) ?></span>
+                                                        <td class="ps-3 fw-bold small text-uppercase">
+                                                            <a href="javascript:void(0)" class="text-decoration-none text-dark" onclick="verDetalleRubrica(<?= $ev['id'] ?>, '<?= addslashes($bloque['nombre']) ?>', '<?= addslashes($sub['titulo_principal']) ?>')">
+                                                                <?= htmlspecialchars($ev['evaluador_nombre']) ?>
+                                                            </a>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <?php 
+                                                                $tipo = strtolower($ev['tipo']);
+                                                                $badgeClass = ($tipo == 'auto') ? 'bg-success' : (($tipo == 'hetero') ? 'bg-danger' : 'bg-primary');
+                                                                $tipoText = ($tipo == 'hetero') ? 'Hetero' : (($tipo == 'auto') ? 'Auto' : 'Coeval');
+                                                            ?>
+                                                            <span class="badge <?= $badgeClass ?> small fw-normal d-inline-block" style="width: 80px;">
+                                                                <?= $tipoText ?>
+                                                            </span>
                                                         </td>
                                                         <td class="text-center fw-bold" style="width: 100px;"><?= number_format($ev['calificacion_final'], 2) ?></td>
                                                         <td class="text-end pe-3 text-muted small" style="width: 100px;"><?= date('d/m/y', strtotime($ev['fecha'])) ?></td>
@@ -126,6 +131,25 @@
     <?php endif; ?>
 </div>
 
+<div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-light d-flex justify-content-between align-items-center py-2">
+                <div id="tituloModalContainer" class="w-100">
+                    <h5 class="modal-title fw-bold text-primary" id="tituloModal">Detalle</h5>
+                </div>
+                <div class="d-print-none">
+                    <button type="button" class="btn btn-sm btn-outline-danger me-2" onclick="window.print()">
+                        <i class="fa-solid fa-file-pdf me-1"></i> Imprimir PDF
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+            </div>
+            <div class="modal-body bg-light" id="contenidoDetalle"></div>
+        </div>
+    </div>
+</div>
+
 <script>
     function filterResults() {
         const query = document.getElementById('searchInput').value.toLowerCase();
@@ -135,11 +159,64 @@
         });
     }
 
+    function verDetalleRubrica(evaluacionId, nombreAlumno, nombreRubrica) {
+        const container = document.getElementById('contenidoDetalle');
+        const titulo = document.getElementById('tituloModal');
+        
+        container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>';
+        const myModal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+        myModal.show();
+
+        fetch('api/get_detalle_evaluacion.php?id=' + evaluacionId)
+            .then(res => res.json())
+            .then(data => {
+                const tipo = data.tipo_evaluacion.toLowerCase();
+                const badgeClass = (tipo == 'auto') ? 'bg-success' : ((tipo == 'hetero') ? 'bg-danger' : 'bg-primary');
+
+                titulo.innerHTML = `
+                    <div style="font-size: 1.1rem;">
+                        Alumno: <span class="text-dark">${nombreAlumno}</span> | 
+                        Rúbrica: <span class="text-dark">${nombreRubrica}</span>
+                    </div>
+                    <div class="mt-1">
+                        Evaluador: <span class="text-dark">${data.evaluador_nombre || 'N/A'}</span> | 
+                        Nota: <span class="badge bg-primary fs-5">${parseFloat(data.calificacion_final || 0).toFixed(2)}</span>
+                        <span class="badge ${badgeClass} ms-2">${data.tipo_evaluacion}</span>
+                    </div>
+                `;
+
+                let html = '<div class="row g-2">';
+                data.criterios.forEach(c => {
+                    html += `
+                    <div class="col-12 mb-2">
+                        <div class="card border-0 shadow-sm rubric-card">
+                            <div class="card-header bg-white fw-bold py-1" style="font-size:0.85rem; border-bottom: 2px solid #0d6efd;">${c.nombre}</div>
+                            <div class="card-body p-2"><div class="row g-1">`;
+                    c.niveles.forEach(n => {
+                        const esSeleccionado = (n.valor == c.valor_seleccionado);
+                        const color = n.valor <= 1 ? 'danger' : (n.valor <= 2 ? 'warning' : (n.valor <= 3 ? 'info' : 'success'));
+                        const claseBoton = esSeleccionado 
+                            ? `btn-${color} active border-3 shadow-sm` 
+                            : `btn-outline-dark bg-secondary bg-opacity-25 text-dark border-secondary`;
+                        
+                        html += `
+                        <div class="col-3">
+                            <div class="btn ${claseBoton} w-100 p-1 d-flex flex-column align-items-center justify-content-center square-btn" style="min-height:100px; cursor:default; pointer-events:none;">
+                                <div class="fw-bold mb-1" style="font-size: 0.8rem;">${n.etiqueta} (${n.valor})</div>
+                                <div class="descriptor-text" style="font-size: 0.75rem; line-height: 1.2;">${n.descriptor}</div>
+                            </div>
+                        </div>`;
+                    });
+                    html += `</div></div></div></div>`;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            });
+    }
+
     <?php if($is_print_mode): ?>
     window.addEventListener('load', () => {
-        setTimeout(() => {
-            window.print();
-        }, 800);
+        setTimeout(() => { window.print(); }, 800);
     });
     <?php endif; ?>
 </script>
@@ -149,16 +226,32 @@
     .x-small { font-size: 0.7rem; color: #777; text-transform: uppercase; }
     .accordion-button:not(.collapsed) { background-color: #f8f9fa; color: #0d6efd; box-shadow: none; }
     
-    /* Forzar alineación de tablas */
-    .table { table-layout: fixed; }
-    .table th, .table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    
     @media print {
-        .d-print-none, .btn, .search-box-narrow, .accordion-button::after { display: none !important; }
-        .accordion-collapse { display: block !important; visibility: visible !important; }
-        .accordion-button { background: #eee !important; border: 1px solid #ccc !important; color: black !important; }
-        .card { border: 1px solid #eee !important; page-break-inside: avoid; }
-        body { padding: 0; background: white; }
-        .container { max-width: 100% !important; width: 100% !important; }
+        @page { size: A4 landscape; margin: 5mm; }
+        body { visibility: hidden !important; background: white !important; height: auto !important; }
+        #modalDetalle, #modalDetalle * { visibility: visible !important; }
+        #modalDetalle { 
+            position: absolute !important; 
+            left: 0 !important; 
+            top: 0 !important; 
+            width: 100% !important; 
+            display: block !important; 
+            overflow: visible !important;
+        }
+        .modal-dialog { max-width: 100% !important; width: 100% !important; margin: 0 !important; }
+        .modal-content { border: none !important; box-shadow: none !important; }
+        .modal-header { border-bottom: 2px solid #0d6efd !important; padding: 10px !important; }
+        .modal-body { background: white !important; padding: 10px !important; }
+        .rubric-card { break-inside: avoid; border: 1px solid #eee !important; margin-bottom: 10px !important; }
+        .square-btn { 
+            min-height: 130px !important; 
+            border-radius: 8px !important;
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact; 
+        }
+        .col-3 { width: 25% !important; float: left !important; }
+        .row { display: block !important; }
+        .row::after { content: ""; display: table; clear: both; }
+        .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
 </style>

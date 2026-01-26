@@ -22,7 +22,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_evaluacion'])
 
     if ($tarea_id && $rubrica_id && $evaluado_id) {
         try {
-            // --- CAMBIO: VALIDACIÓN DE DUPLICADOS ---
             $stmtCheck = $pdo->prepare("SELECT id FROM evaluaciones WHERE tarea_id = ? AND evaluador_id = ? AND evaluado_id = ?");
             $stmtCheck->execute([$tarea_id, $_SESSION['user_id'], $evaluado_id]);
             if ($stmtCheck->fetch()) {
@@ -31,18 +30,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_evaluacion'])
 
             $pdo->beginTransaction();
             
-            // Determinar tipo de evaluación
             $tipo = 'hetero';
             if ($currentUser['rol'] === 'alumno') {
                 $tipo = ($evaluado_id == $_SESSION['user_id']) ? 'auto' : 'co';
             }
 
-            // 1. Insertar en la tabla 'evaluaciones'
             $stmt = $pdo->prepare("INSERT INTO evaluaciones (tarea_id, rubrica_id, evaluador_id, evaluado_id, tipo, fecha) VALUES (?, ?, ?, ?, ?, NOW())");
             $stmt->execute([$tarea_id, $rubrica_id, $_SESSION['user_id'], $evaluado_id, $tipo]);
             $eval_id = $pdo->lastInsertId();
 
-            // 2. Insertar detalles
             $suma_puntos = 0;
             if (!empty($puntos)) {
                 $stmtDetalle = $pdo->prepare("INSERT INTO puntuaciones (evaluacion_id, criterio_id, valor_obtenido) VALUES (?, ?, ?)");
@@ -52,18 +48,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_evaluacion'])
                 }
             }
 
-            // 3. Calcular nota final (Base 10)
             $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM criterios WHERE rubrica_id = ?");
             $stmtCount->execute([$rubrica_id]);
             $num_crit = $stmtCount->fetchColumn();
             
             $nota_final = ($num_crit > 0) ? ($suma_puntos / ($num_crit * 4)) * 10 : 0;
+            $nota_formateada = round($nota_final, 2);
 
             $pdo->prepare("UPDATE evaluaciones SET calificacion_final = ? WHERE id = ?")
-                ->execute([round($nota_final, 2), $eval_id]);
+                ->execute([$nota_formateada, $eval_id]);
             
+            // Captura del nombre del alumno
+            $stName = $pdo->prepare("SELECT nombre FROM usuarios WHERE id = ?");
+            $stName->execute([$evaluado_id]);
+            $nombre_alumno = $stName->fetchColumn() ?: "Alumno";
+
             $pdo->commit();
-            header("Location: index.php?action=evaluar&success=Evaluación guardada con éxito.");
+            
+            header("Location: index.php?action=evaluar&success=Evaluación guardada con éxito.&nota=" . $nota_formateada . "&alumno=" . urlencode($nombre_alumno));
             exit;
 
         } catch (Exception $e) {

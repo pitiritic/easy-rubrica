@@ -1,8 +1,24 @@
+<?php 
+// Corrección para evitar el error Deprecated: se asegura que sea string
+$nota_url = (string)($_GET['nota'] ?? '');
+$alumno_url = (string)($_GET['alumno'] ?? '');
+?>
+
 <?php if($mensaje): ?>
-    <div class="alert alert-success alert-dismissible fade show"><?= $mensaje ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="fa-solid fa-circle-check me-1"></i>
+        <?= htmlspecialchars((string)$mensaje) ?>
+        <?php if($alumno_url !== '' || $nota_url !== ''): ?>
+            <strong>
+                (<?= htmlspecialchars($alumno_url) ?>: <?= htmlspecialchars($nota_url) ?>)
+            </strong>
+        <?php endif; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
 <?php endif; ?>
+
 <?php if(isset($error) && $error): ?>
-    <div class="alert alert-danger alert-dismissible fade show"><?= $error ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+    <div class="alert alert-danger alert-dismissible fade show"><?= htmlspecialchars((string)$error) ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
 <?php endif; ?>
 
 <div class="row">
@@ -18,12 +34,12 @@
                     <?php foreach($tareas_disponibles as $t): ?>
                         <div class="list-group-item p-3 border-bottom">
                             <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h6 class="fw-bold mb-0"><?= htmlspecialchars($t['titulo']) ?></h6>
+                                <h6 class="fw-bold mb-0"><?= htmlspecialchars((string)$t['titulo']) ?></h6>
                                 <span class="badge rounded-pill bg-success"><i class="fa-solid fa-clock"></i> Activa</span>
                             </div>
-                            <small class="text-muted d-block mb-2">Clase: <?= htmlspecialchars($t['clase_nombre']) ?></small>
+                            <small class="text-muted d-block mb-2">Clase: <?= htmlspecialchars((string)$t['clase_nombre']) ?></small>
                             <button class="btn btn-sm btn-outline-primary w-100 fw-bold mt-1" 
-                                    onclick="seleccionarTarea(<?= $t['tarea_id'] ?>, <?= $t['rubrica_id'] ?>, '<?= addslashes($t['titulo']) ?>')">
+                                    onclick="seleccionarTarea(<?= (int)$t['tarea_id'] ?>, <?= (int)$t['rubrica_id'] ?>, '<?= addslashes((string)$t['titulo']) ?>')">
                                 Evaluar ahora <i class="fa-solid fa-chevron-right ms-1"></i>
                             </button>
                         </div>
@@ -74,7 +90,6 @@
 </div>
 
 <script>
-// Obtenemos el ID del usuario actual desde PHP para JS
 const currentUserId = <?= json_encode($_SESSION['user_id']) ?>;
 
 function seleccionarTarea(tareaId, rubricaId, titulo) {
@@ -84,7 +99,6 @@ function seleccionarTarea(tareaId, rubricaId, titulo) {
     document.getElementById('input_tarea_id').value = tareaId;
     document.getElementById('input_rubrica_id').value = rubricaId;
     
-    // Carga de alumnos con aviso de autoevaluación
     fetch('api/get_alumnos.php?tarea_id=' + tareaId)
         .then(res => res.json())
         .then(data => {
@@ -93,7 +107,6 @@ function seleccionarTarea(tareaId, rubricaId, titulo) {
                 html = '<option value="">No hay alumnos pendientes</option>';
             } else {
                 data.forEach(a => {
-                    // CAMBIO: Aviso si el alumno es el propio usuario
                     let aviso = (a.id == currentUserId) ? ' (ERES TÚ - AUTOEVALUACIÓN)' : '';
                     html += `<option value="${a.id}">${a.nombre}${aviso}</option>`;
                 });
@@ -101,7 +114,6 @@ function seleccionarTarea(tareaId, rubricaId, titulo) {
             document.getElementById('select_alumno').innerHTML = html;
         });
 
-    // Carga de rúbrica (igual que antes)
     const container = document.getElementById('criterios_container');
     container.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
 
