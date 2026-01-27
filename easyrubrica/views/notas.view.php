@@ -5,12 +5,15 @@
             <?= $currentUser['rol'] === 'alumno' ? 'Mis Calificaciones' : 'Panel de Calificaciones' ?>
         </h3>
         <div class="d-flex gap-2 align-items-center">
-            <a href="?action=notas&vista=<?= $vista_actual ?>" class="btn btn-outline-secondary btn-sm px-3 bg-white shadow-sm">
-                <i class="fa-solid fa-arrow-left me-1"></i> Volver
+            <!-- Cambio: Si está en modo impresión, el botón vuelve a la lista completa; si no, al home -->
+            <a href="<?= $is_print_mode ? '?action=notas&vista='.$vista_actual : 'index.php?action=home' ?>" class="btn btn-outline-secondary btn-sm px-3 bg-white shadow-sm">
+                <i class="fa-solid <?= $is_print_mode ? 'fa-rotate-left' : 'fa-arrow-left' ?> me-1"></i> 
+                <?= $is_print_mode ? 'Ver todos' : 'Volver' ?>
             </a>
         </div>
     </div>
 
+    <!-- Cabecera exclusiva para impresión -->
     <div class="d-none d-print-block mb-4 text-center">
         <h2 class="fw-bold">Informe de Calificaciones</h2>
         <p class="text-muted small">Generado por EasyRúbrica el <?= date('d/m/Y H:i') ?></p>
@@ -18,7 +21,8 @@
     </div>
 
     <?php if($currentUser['rol'] === 'alumno'): ?>
-        <div class="card shadow-sm border-0 d-print-none">
+        <!-- VISTA ALUMNO -->
+        <div class="card shadow-sm border-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="bg-primary text-white">
@@ -40,11 +44,15 @@
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                        <?php if(empty($notas_agrupadas)): ?>
+                            <tr><td colspan="3" class="text-center py-4 text-muted">No tienes calificaciones registradas.</td></tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     <?php else: ?>
+        <!-- VISTA PROFESOR / ADMIN -->
         <div class="d-flex align-items-center mb-4 d-print-none gap-3">
             <div class="btn-group shadow-sm">
                 <a href="?action=notas&vista=por_tarea" class="btn <?= $vista_actual == 'por_tarea' ? 'btn-primary' : 'btn-outline-primary' ?>">Por Tareas</a>
@@ -70,8 +78,8 @@
                                     <span class="badge bg-light text-dark ms-2 border fw-normal small"><?= htmlspecialchars($bloque['extra']) ?></span>
                                 </div>
                                 <div class="d-print-none">
-                                    <a href="?action=notas&export_csv=<?= substr($id_p, 1) ?>&tipo_export=<?= substr($id_p, 0, 1) == 'T' ? 'tarea' : 'alumno' ?>" class="btn btn-sm btn-outline-success border-0"><i class="fa-solid fa-file-csv fa-lg"></i></a>
-                                    <a href="?action=notas&vista=<?= $vista_actual ?>&export_pdf=<?= substr($id_p, 1) ?>&tipo_export=<?= substr($id_p, 0, 1) == 'T' ? 'tarea' : 'alumno' ?>" class="btn btn-sm btn-outline-danger border-0"><i class="fa-solid fa-file-pdf fa-lg"></i></a>
+                                    <a href="?action=notas&export_csv=<?= substr($id_p, 1) ?>&tipo_export=<?= substr($id_p, 0, 1) == 'T' ? 'tarea' : 'alumno' ?>" class="btn btn-sm btn-outline-success border-0" title="Exportar CSV"><i class="fa-solid fa-file-csv fa-lg"></i></a>
+                                    <a href="?action=notas&vista=<?= $vista_actual ?>&export_pdf=<?= substr($id_p, 1) ?>&tipo_export=<?= substr($id_p, 0, 1) == 'T' ? 'tarea' : 'alumno' ?>" class="btn btn-sm btn-outline-danger border-0" title="Generar PDF"><i class="fa-solid fa-file-pdf fa-lg"></i></a>
                                 </div>
                             </div>
                         </button>
@@ -100,9 +108,10 @@
                                                 <?php foreach($sub['evaluaciones'] as $ev): ?>
                                                     <tr>
                                                         <td class="ps-3 fw-bold small text-uppercase">
-                                                            <a href="javascript:void(0)" class="text-decoration-none text-dark" onclick="verDetalleRubrica(<?= $ev['id'] ?>, '<?= addslashes($bloque['nombre']) ?>', '<?= addslashes($sub['titulo_principal']) ?>')">
-                                                                <?= htmlspecialchars($ev['evaluador_nombre']) ?>
+                                                            <a href="javascript:void(0)" class="text-decoration-none text-dark d-print-none" onclick="verDetalleRubrica(<?= $ev['id'] ?>, '<?= addslashes($bloque['nombre']) ?>', '<?= addslashes($sub['titulo_principal']) ?>')">
+                                                                <?= htmlspecialchars($ev['evaluador_nombre']) ?> <i class="fa-solid fa-eye ms-1 text-muted small"></i>
                                                             </a>
+                                                            <span class="d-none d-print-inline"><?= htmlspecialchars($ev['evaluador_nombre']) ?></span>
                                                         </td>
                                                         <td class="text-center">
                                                             <?php 
@@ -131,6 +140,7 @@
     <?php endif; ?>
 </div>
 
+<!-- Modal Detalle -->
 <div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -159,12 +169,13 @@
         });
     }
 
-    function verDetalleRubrica(evaluacionId, nombreAlumno, nombreRubrica) {
+    function verDetalleRubrica(evaluacionId, nombreUno, nombreDos) {
         const container = document.getElementById('contenidoDetalle');
         const titulo = document.getElementById('tituloModal');
         
         container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>';
-        const myModal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+        const modalEl = document.getElementById('modalDetalle');
+        const myModal = new bootstrap.Modal(modalEl);
         myModal.show();
 
         fetch('api/get_detalle_evaluacion.php?id=' + evaluacionId)
@@ -175,8 +186,7 @@
 
                 titulo.innerHTML = `
                     <div style="font-size: 1.1rem;">
-                        Alumno: <span class="text-dark">${nombreAlumno}</span> | 
-                        Rúbrica: <span class="text-dark">${nombreRubrica}</span>
+                        <strong>${nombreUno}</strong> | <span>${nombreDos}</span>
                     </div>
                     <div class="mt-1">
                         Evaluador: <span class="text-dark">${data.evaluador_nombre || 'N/A'}</span> | 
@@ -212,12 +222,20 @@
                 html += '</div>';
                 container.innerHTML = html;
             });
+
+        modalEl.addEventListener('show.bs.modal', () => document.body.classList.add('modal-open-printing'));
+        modalEl.addEventListener('hidden.bs.modal', () => document.body.classList.remove('modal-open-printing'));
     }
 
     <?php if($is_print_mode): ?>
     window.addEventListener('load', () => {
-        setTimeout(() => { window.print(); }, 800);
+        setTimeout(() => { window.print(); }, 1000);
     });
+    
+    // Regresar automáticamente a la lista completa al cerrar el cuadro de impresión
+    window.onafterprint = function() {
+        window.location.href = "?action=notas&vista=<?= $vista_actual ?>";
+    };
     <?php endif; ?>
 </script>
 
@@ -227,31 +245,24 @@
     .accordion-button:not(.collapsed) { background-color: #f8f9fa; color: #0d6efd; box-shadow: none; }
     
     @media print {
-        @page { size: A4 landscape; margin: 5mm; }
-        body { visibility: hidden !important; background: white !important; height: auto !important; }
-        #modalDetalle, #modalDetalle * { visibility: visible !important; }
-        #modalDetalle { 
-            position: absolute !important; 
-            left: 0 !important; 
-            top: 0 !important; 
-            width: 100% !important; 
-            display: block !important; 
-            overflow: visible !important;
-        }
-        .modal-dialog { max-width: 100% !important; width: 100% !important; margin: 0 !important; }
-        .modal-content { border: none !important; box-shadow: none !important; }
-        .modal-header { border-bottom: 2px solid #0d6efd !important; padding: 10px !important; }
-        .modal-body { background: white !important; padding: 10px !important; }
-        .rubric-card { break-inside: avoid; border: 1px solid #eee !important; margin-bottom: 10px !important; }
-        .square-btn { 
-            min-height: 130px !important; 
-            border-radius: 8px !important;
-            -webkit-print-color-adjust: exact; 
-            print-color-adjust: exact; 
-        }
-        .col-3 { width: 25% !important; float: left !important; }
-        .row { display: block !important; }
-        .row::after { content: ""; display: table; clear: both; }
-        .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .d-print-none, .navbar, .btn-group, .search-box-narrow, .accordion-button::after { display: none !important; }
+        
+        @page { size: A4 portrait; margin: 10mm; }
+        body { background: white !important; visibility: visible !important; }
+        .container { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
+        
+        .collapse { display: block !important; height: auto !important; visibility: visible !important; }
+        .accordion-item { border: 1px solid #eee !important; margin-bottom: 15px !important; }
+        .accordion-button { background: #f8f9fa !important; color: #000 !important; pointer-events: none; }
+        
+        body.modal-open-printing { visibility: hidden !important; }
+        body.modal-open-printing .modal-backdrop { display: none !important; }
+        body.modal-open-printing #modalDetalle, 
+        body.modal-open-printing #modalDetalle * { visibility: visible !important; }
+        body.modal-open-printing #modalDetalle { position: absolute; left: 0; top: 0; width: 100%; border: none; }
+        
+        .rubric-card { break-inside: avoid; border: 1px solid #ccc !important; }
+        .square-btn { -webkit-print-color-adjust: exact; print-color-adjust: exact; border: 1px solid #ddd !important; }
+        .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; border: 1px solid #000 !important; }
     }
 </style>

@@ -1,5 +1,17 @@
 # Registro de Cambios (Changelog) - Easy Rúbrica
 
+## [2.7.0] - 2026-01-27
+### ✨ Añadido (Sistema de Auditoría y Trazabilidad)
+- **Módulo de Auditoría Global:** Implementación de un sistema de registro integral mediante la nueva tabla `auditoria` y la librería `Audit.php` para el seguimiento de eventos en tiempo real.
+- **Registro Automatizado de Acciones:** Seguimiento detallado de la creación e importación (individual y masiva) de Usuarios, Clases, Rúbricas y Asignaciones de Tareas.
+- **Control de Seguridad Crítico:** Registro obligatorio de cambios de contraseñas, modificaciones de roles y cualquier acción de borrado permanente de datos en el sistema.
+- **Trazabilidad de Evaluación:** Registro de cada evaluación completada y monitorización de los cambios de estado (bloqueo/desbloqueo de candados) en las tareas asignadas.
+- **Panel de Control de Auditoría:** Nueva interfaz de visualización integrada en Ajustes con una estética profesional diferenciada en **Azul Marino (#1b355c)**.
+
+### 🔍 Añadido (Búsqueda y Gestión de Logs)
+- **Sistema de Filtros Avanzado:** Implementación de un buscador inteligente por texto (usuario, detalles, IP) y filtrado por tipo de evento con persistencia de filtros en la paginación.
+- **Informes y Mantenimiento:** Herramienta de exportación de auditoría a formato CSV y funcionalidad de limpieza manual del historial para administradores.
+- **Paginación por Bloques:** Optimización de la carga del historial mediante división en bloques de 20 registros para garantizar fluidez.
 
 ## [2.6.0] - 2026-01-26
 ### ✨ Añadido (Reportes y Visualización Avanzada)
@@ -77,4 +89,4 @@
 ### 🚀 Características
 - **Roles:** Admin, Profesor y Alumno.
 - **Evaluación:** Motor de rúbricas con cálculo de notas en tiempo real.
-- **Infraestructura:** Stack PHP 8.2 + MariaDB 10.6 bajo Docker.
+- **Infraestructura:** Stack PHP 8.2 + MariaDB 10.6 bajo Docker

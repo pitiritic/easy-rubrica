@@ -102,7 +102,7 @@ switch ($action) {
     case 'login':                require 'controllers/auth.php'; break;
     case 'recover':              require 'controllers/recover.php'; break;
     case 'exportar_pdf':         require 'controllers/pdf_rubrica.php'; break;
-    case 'logout':               session_destroy(); header("Location: ?action=login"); exit;
+    case 'logout':               require 'controllers/auth.php'; break; // Cambiado para que Audit registre el cierre
     case 'usuarios':             require 'controllers/admin_users.php'; break;
     case 'gestion_clases_lista': require 'controllers/admin_classes.php'; break;
     case 'asignar_rubricas':     require 'controllers/admin.php'; break;
@@ -110,6 +110,7 @@ switch ($action) {
     case 'evaluar':              require 'controllers/evaluar.php'; break;
     case 'notas':                require 'controllers/notas.php'; break;
     case 'ajustes':              require 'controllers/ajustes.php'; break;
+    case 'auditoria':            require 'controllers/auditoria.php'; break; // <--- NUEVA RUTA INTEGRADA
     case 'home':
     default:                     $is_dashboard = true; break;
 }

@@ -1,9 +1,11 @@
 <?php
 // easyrubrica/controllers/auth.php
+require_once 'libs/Audit.php';
 
 $error = "";
 
 if ($action == 'logout') {
+    Audit::log($pdo, "Cierre de Sesión", "El usuario cerró su sesión voluntariamente.");
     session_destroy();
     header("Location: ?action=login");
     exit;
@@ -13,15 +15,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $usuario = $_POST['usuario'];
     $password = $_POST['password'];
 
-    // Buscar usuario
     $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE usuario = ?");
     $stmt->execute([$usuario]);
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user['password'])) {
         $_SESSION['user_id'] = $user['id'];
-        
-        // CAMBIO: Redirigir al Panel de Control (home) en lugar de evaluar
+        Audit::log($pdo, "Inicio de Sesión", "Acceso exitoso al sistema.");
         header("Location: ?action=home"); 
         exit;
     } else {
@@ -30,4 +30,3 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 require 'views/login.view.php';
-?>

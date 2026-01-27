@@ -1,12 +1,12 @@
 <?php
 // controllers/admin_users.php
+require_once 'libs/Audit.php';
 
 if (!isset($currentUser) || ($currentUser['rol'] !== 'admin' && $currentUser['rol'] !== 'profesor')) {
     die("Acceso denegado.");
 }
 
-$mensaje = "";
-$error = "";
+$mensaje = ""; $error = "";
 $search = $_GET['q'] ?? '';
 
 // --- ORDENACIÓN ---
@@ -23,8 +23,7 @@ if (isset($_GET['descargar_plantilla'])) {
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
     fputcsv($output, ['rol', 'usuario', 'nombre', 'email', 'clase', 'password'], ';');
     fputcsv($output, ['alumno', 'ejemplo01', 'Nombre Alumno', 'alumno@correo.com', 'Clase A', '123456'], ';');
-    fclose($output);
-    exit;
+    fclose($output); exit;
 }
 
 // --- ACCIÓN: IMPORTAR CSV ---
@@ -65,7 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['importar_csv'])) {
                         $count++;
                     }
                 }
-                $pdo->commit(); $mensaje = "Importados $count usuarios."; fclose($handle);
+                $pdo->commit();
+                Audit::log($pdo, "Importación Masiva", "Se importaron $count usuarios mediante CSV.");
+                $mensaje = "Importados $count usuarios."; fclose($handle);
             }
         } catch (Exception $e) { if($pdo->inTransaction()) $pdo->rollBack(); $error = $e->getMessage(); }
     }
@@ -85,6 +86,7 @@ if (isset($_POST['borrar_masivo']) && isset($_POST['usuarios_ids'])) {
                 $params = $ids;
             }
             $stmt->execute($params);
+            Audit::log($pdo, "Usuario Eliminado", "Se borraron usuarios. IDs: " . implode(',', $ids));
             $mensaje = "Usuarios eliminados correctamente.";
         }
     } catch (Exception $e) { $error = $e->getMessage(); }
@@ -102,7 +104,9 @@ if (isset($_POST['crear_usuario'])) {
         if (!empty($_POST['clases'])) {
             foreach ($_POST['clases'] as $cid) $pdo->prepare("INSERT INTO clase_usuario (clase_id, usuario_id) VALUES (?, ?)")->execute([$cid, $nid]);
         }
-        $pdo->commit(); $mensaje = "Usuario creado correctamente.";
+        $pdo->commit();
+        Audit::log($pdo, "Usuario Creado", "Se generó el usuario: " . $_POST['usuario'] . " con rol " . $rol_f);
+        $mensaje = "Usuario creado correctamente.";
     } catch (Exception $e) { $pdo->rollBack(); $error = $e->getMessage(); }
 }
 
@@ -120,46 +124,32 @@ if (isset($_POST['editar_usuario'])) {
             if (!empty($_POST['password'])) {
                 $pdo->prepare("UPDATE usuarios SET usuario=?, nombre=?, email=?, rol=?, password=? WHERE id=?")
                     ->execute([$_POST['usuario'], $_POST['nombre'], $_POST['email'], $rol_f, password_hash($_POST['password'], PASSWORD_DEFAULT), $id_e]);
+                Audit::log($pdo, "Usuario Modificado", "Se actualizó datos y contraseña del usuario ID: " . $id_e);
             } else {
                 $pdo->prepare("UPDATE usuarios SET usuario=?, nombre=?, email=?, rol=? WHERE id=?")
                     ->execute([$_POST['usuario'], $_POST['nombre'], $_POST['email'], $rol_f, $id_e]);
+                Audit::log($pdo, "Usuario Modificado", "Se actualizaron datos/rol del usuario ID: " . $id_e);
             }
         }
-
+        // ... (Resto de lógica de clases sin cambios)
         if ($currentUser['rol'] === 'admin') {
             $pdo->prepare("DELETE FROM clase_usuario WHERE usuario_id=?")->execute([$id_e]);
-            if (!empty($_POST['clases'])) {
-                foreach ($_POST['clases'] as $cid) $pdo->prepare("INSERT INTO clase_usuario (clase_id, usuario_id) VALUES (?, ?)")->execute([$cid, $id_e]);
-            }
+            if (!empty($_POST['clases'])) { foreach ($_POST['clases'] as $cid) $pdo->prepare("INSERT INTO clase_usuario (clase_id, usuario_id) VALUES (?, ?)")->execute([$cid, $id_e]); }
         } else {
             $stP = $pdo->prepare("SELECT id FROM clases WHERE autor_id = ?");
-            $stP->execute([$currentUser['id']]);
-            $mis_clases = $stP->fetchAll(PDO::FETCH_COLUMN);
+            $stP->execute([$currentUser['id']]); $mis_clases = $stP->fetchAll(PDO::FETCH_COLUMN);
             if (!empty($mis_clases)) {
                 $placeholders = implode(',', array_fill(0, count($mis_clases), '?'));
-                $pdo->prepare("DELETE FROM clase_usuario WHERE usuario_id = ? AND clase_id IN ($placeholders)")
-                    ->execute(array_merge([$id_e], $mis_clases));
-                if (!empty($_POST['clases'])) {
-                    foreach ($_POST['clases'] as $cid) {
-                        if (in_array($cid, $mis_clases)) $pdo->prepare("INSERT IGNORE INTO clase_usuario (clase_id, usuario_id) VALUES (?, ?)")->execute([$cid, $id_e]);
-                    }
-                }
+                $pdo->prepare("DELETE FROM clase_usuario WHERE usuario_id = ? AND clase_id IN ($placeholders)")->execute(array_merge([$id_e], $mis_clases));
+                if (!empty($_POST['clases'])) { foreach ($_POST['clases'] as $cid) { if (in_array($cid, $mis_clases)) $pdo->prepare("INSERT IGNORE INTO clase_usuario (clase_id, usuario_id) VALUES (?, ?)")->execute([$cid, $id_e]); } }
             }
         }
         $pdo->commit(); $mensaje = "Cambios guardados.";
     } catch (Exception $e) { $pdo->rollBack(); $error = $e->getMessage(); }
 }
 
-// --- LISTADO ---
-$sql = "SELECT u.id, u.usuario, u.nombre, u.email, u.rol, u.creador_id, 
-        (SELECT GROUP_CONCAT(c.nombre SEPARATOR ', ') FROM clases c JOIN clase_usuario cu ON c.id = cu.clase_id WHERE cu.usuario_id = u.id) as clase_nombre
-        FROM usuarios u ORDER BY $order_by $dir";
+$sql = "SELECT u.id, u.usuario, u.nombre, u.email, u.rol, u.creador_id, (SELECT GROUP_CONCAT(c.nombre SEPARATOR ', ') FROM clases c JOIN clase_usuario cu ON c.id = cu.clase_id WHERE cu.usuario_id = u.id) as clase_nombre FROM usuarios u ORDER BY $order_by $dir";
 $usuarios = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-
-foreach ($usuarios as $k => $u) {
-    $stI = $pdo->prepare("SELECT clase_id FROM clase_usuario WHERE usuario_id = ?");
-    $stI->execute([$u['id']]);
-    $usuarios[$k]['clases_ids'] = $stI->fetchAll(PDO::FETCH_COLUMN);
-}
+foreach ($usuarios as $k => $u) { $stI = $pdo->prepare("SELECT clase_id FROM clase_usuario WHERE usuario_id = ?"); $stI->execute([$u['id']]); $usuarios[$k]['clases_ids'] = $stI->fetchAll(PDO::FETCH_COLUMN); }
 $all_clases = $pdo->query("SELECT * FROM clases ORDER BY nombre ASC")->fetchAll();
 require 'views/admin_users.view.php';

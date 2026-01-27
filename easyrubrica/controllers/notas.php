@@ -89,7 +89,6 @@ if ($currentUser['rol'] === 'alumno') {
     
     $params = [$userId];
 
-    // Si es modo PDF, filtramos por el ID específico
     if ($is_print_mode) {
         $id_target = (int)$_GET['export_pdf'];
         $tipo_target = $_GET['tipo_export'];
