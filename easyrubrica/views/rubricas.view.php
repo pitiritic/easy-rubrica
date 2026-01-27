@@ -45,7 +45,7 @@ if (!isset($mode) || $mode !== 'edit' || !isset($rubrica_a_editar)) {
                 <div class="col-md-3">
                     <select name="f_asignatura" class="form-select" onchange="this.form.submit()">
                         <option value="">-- Asignatura --</option>
-                        <?php foreach($asignaturas_disponibles as $item): ?>
+                        <?php foreach(($asignaturas_disponibles ?? []) as $item): ?>
                             <option value="<?= htmlspecialchars($item) ?>" <?= (isset($_GET['f_asignatura']) && $_GET['f_asignatura'] == $item) ? 'selected' : '' ?>><?= htmlspecialchars($item) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -116,7 +116,7 @@ if (!isset($mode) || $mode !== 'edit' || !isset($rubrica_a_editar)) {
                     <div class="col-md-4">
                         <label class="fw-bold small text-muted">ASIGNATURA</label>
                         <input type="text" name="asignatura" class="form-control" list="listaAsignaturas" value="<?= htmlspecialchars($rubrica_a_editar['asignatura']) ?>">
-                        <datalist id="listaAsignaturas"><?php foreach($asignaturas_disponibles as $a) echo "<option value='".htmlspecialchars($a)."'>"; ?></datalist>
+                        <datalist id="listaAsignaturas"><?php foreach(($asignaturas_disponibles ?? []) as $a) echo "<option value='".htmlspecialchars($a)."'>"; ?></datalist>
                     </div>
                 </div>
 
@@ -154,7 +154,7 @@ if (!isset($mode) || $mode !== 'edit' || !isset($rubrica_a_editar)) {
                         <tr><th class="ps-4">Rúbrica</th><th>Clasificación</th><th>Autor</th><th class="text-end pe-4">Acciones</th></tr>
                     </thead>
                     <tbody>
-                        <?php foreach($lista_rubricas as $r):
+                        <?php foreach(($lista_rubricas ?? []) as $r):
                             $es_admin = ($currentUser['rol'] == 'admin');
                             $es_autor = ($r['autor_id'] == $currentUser['id']);
                         ?>
@@ -169,12 +169,12 @@ if (!isset($mode) || $mode !== 'edit' || !isset($rubrica_a_editar)) {
                                                 <button class="btn-close" data-bs-dismiss="modal"></button>
                                             </div>
                                             <div class="modal-body bg-light">
-                                                <?php foreach($r['datos_completos'] as $c): ?>
+                                                <?php foreach(($r['datos_completos'] ?? []) as $c): ?>
                                                     <div class="card mb-2">
                                                         <div class="card-header fw-bold"><?= htmlspecialchars($c['nombre']) ?></div>
                                                         <div class="card-body">
                                                             <div class="row text-center small">
-                                                                <?php foreach($c['niveles'] as $n): ?>
+                                                                <?php foreach(($c['niveles'] ?? []) as $n): ?>
                                                                     <div class="col-3 border-end"><strong><?= $n['valor'] ?></strong><br><?= htmlspecialchars($n['descriptor']) ?></div>
                                                                 <?php endforeach; ?>
                                                             </div>
@@ -188,9 +188,12 @@ if (!isset($mode) || $mode !== 'edit' || !isset($rubrica_a_editar)) {
                             </td>
                             <td>
                                 <span class="badge bg-white text-primary border"><?= htmlspecialchars($r['asignatura']) ?></span><br>
-                                <?php foreach($r['lista_competencias'] as $tag): ?><span class="badge bg-success-subtle text-success border me-1"><?= htmlspecialchars($tag) ?></span><?php endforeach; ?>
+                                <!-- CORRECCIÓN AQUÍ: Uso de ?? [] para evitar error de variable indefinida o nula -->
+                                <?php foreach(($r['lista_competencias'] ?? []) as $tag): ?>
+                                    <span class="badge bg-success-subtle text-success border me-1"><?= htmlspecialchars($tag) ?></span>
+                                <?php endforeach; ?>
                             </td>
-                            <td><small><?= $es_autor ? 'Tú' : htmlspecialchars($r['autor_nombre']) ?></small></td>
+                            <td><small><?= $es_autor ? 'Tú' : htmlspecialchars($r['autor_nombre'] ?? 'Sistema') ?></small></td>
                             <td class="text-end pe-4">
                                 <div class="d-flex justify-content-end action-group">
                                     <a href="?action=rubricas&export_csv_id=<?= $r['id'] ?>" class="btn btn-action btn-outline-success" title="Descargar CSV"><i class="fa-solid fa-file-csv"></i></a>

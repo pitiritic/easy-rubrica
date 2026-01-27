@@ -5,7 +5,7 @@ require_once 'libs/Audit.php';
 if (!isset($currentUser) || $currentUser['rol'] == 'alumno') die("Acceso denegado.");
 $mensaje = ""; $error = ""; $mode = isset($_GET['edit_id']) ? 'edit' : 'create';
 
-// --- 1. DESCARGAR CSV (Sin cambios) ---
+// --- 1. DESCARGAR CSV ---
 if (isset($_GET['export_csv_id'])) {
     $id_csv = (int)$_GET['export_csv_id'];
     $stmtR = $pdo->prepare("SELECT * FROM rubricas WHERE id = ?"); $stmtR->execute([$id_csv]); $rub = $stmtR->fetch();
@@ -100,8 +100,43 @@ if (isset($_POST['duplicar_rubrica_id'])) {
         $pdo->commit(); $mensaje = "Rúbrica clonada correctamente.";
     } catch (Exception $e) { $pdo->rollBack(); $error = "Error al clonar: " . $e->getMessage(); }
 }
-// ... (Listado y resto de lógica)
+
 if (isset($_GET['msg'])) { $mensaje = htmlspecialchars($_GET['msg']); }
-if ($mode === 'edit' && isset($_GET['edit_id'])) { $stmt = $pdo->prepare("SELECT * FROM rubricas WHERE id = ?"); $stmt->execute([(int)$_GET['edit_id']]); $rubrica_a_editar = $stmt->fetch(); if ($rubrica_a_editar) { $stmtC = $pdo->prepare("SELECT * FROM criterios WHERE rubrica_id = ?"); $stmtC->execute([(int)$_GET['edit_id']]); $criterios = $stmtC->fetchAll(); foreach ($criterios as $key => $crit) { $stmtN = $pdo->prepare("SELECT * FROM niveles WHERE criterio_id = ? ORDER BY valor ASC"); $stmtN->execute([$crit['id']]); $criterios[$key]['niveles'] = $stmtN->fetchAll(); } $rubrica_a_editar['criterios'] = $criterios; $comps = json_decode($rubrica_a_editar['competencias'] ?? '[]', true); $rubrica_a_editar['competencias_string'] = is_array($comps) ? implode(',', $comps) : ''; } }
+
+if ($mode === 'edit' && isset($_GET['edit_id'])) { 
+    $stmt = $pdo->prepare("SELECT * FROM rubricas WHERE id = ?"); 
+    $stmt->execute([(int)$_GET['edit_id']]); 
+    $rubrica_a_editar = $stmt->fetch(); 
+    if ($rubrica_a_editar) { 
+        $stmtC = $pdo->prepare("SELECT * FROM criterios WHERE rubrica_id = ?"); 
+        $stmtC->execute([(int)$_GET['edit_id']]); 
+        $criterios = $stmtC->fetchAll(); 
+        foreach ($criterios as $key => $crit) { 
+            $stmtN = $pdo->prepare("SELECT * FROM niveles WHERE criterio_id = ? ORDER BY valor ASC"); 
+            $stmtN->execute([$crit['id']]); 
+            $criterios[$key]['niveles'] = $stmtN->fetchAll(); 
+        } 
+        $rubrica_a_editar['criterios'] = $criterios; 
+        $comps = json_decode($rubrica_a_editar['competencias'] ?? '[]', true) ?: []; 
+        $rubrica_a_editar['competencias_string'] = is_array($comps) ? implode(',', $comps) : ''; 
+        $rubrica_a_editar['lista_competencias'] = $comps;
+    } 
+}
+
 $lista_rubricas = $pdo->query("SELECT r.*, u.nombre as autor_nombre FROM rubricas r LEFT JOIN usuarios u ON u.id = r.autor_id ORDER BY r.id DESC")->fetchAll();
+foreach ($lista_rubricas as $key => $r) {
+    $lista_rubricas[$key]['lista_competencias'] = json_decode($r['competencias'] ?? '[]', true) ?: [];
+    $stmtC = $pdo->prepare("SELECT * FROM criterios WHERE rubrica_id = ?");
+    $stmtC->execute([$r['id']]);
+    $crits = $stmtC->fetchAll();
+    foreach($crits as $ck => $cv) {
+        $stmtN = $pdo->prepare("SELECT * FROM niveles WHERE criterio_id = ? ORDER BY valor ASC");
+        $stmtN->execute([$cv['id']]);
+        $crits[$ck]['niveles'] = $stmtN->fetchAll();
+    }
+    $lista_rubricas[$key]['datos_completos'] = $crits;
+}
+
+$asignaturas_disponibles = $pdo->query("SELECT DISTINCT asignatura FROM rubricas WHERE asignatura!=''")->fetchAll(PDO::FETCH_COLUMN);
+
 require 'views/rubricas.view.php';
