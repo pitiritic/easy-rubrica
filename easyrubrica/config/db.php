@@ -50,6 +50,9 @@ function checkAndMigrate($pdo) {
             }
         }
 
+        // CORRECCIÓN TIPO ENUM (Para evitar error 'Data truncated')
+        $pdo->exec("ALTER TABLE evaluaciones MODIFY COLUMN tipo ENUM('auto', 'coeval', 'hetero') NOT NULL");
+
         // Tablas de ajustes (SMTP y Sistema)
         $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_smtp (
             id INT PRIMARY KEY,

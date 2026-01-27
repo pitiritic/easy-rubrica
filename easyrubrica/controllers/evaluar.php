@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_evaluacion'])
             
             $tipo = 'hetero';
             if ($currentUser['rol'] === 'alumno') {
-                $tipo = ($evaluado_id == $_SESSION['user_id']) ? 'auto' : 'co';
+                $tipo = ($evaluado_id == $_SESSION['user_id']) ? 'auto' : 'coeval';
             }
 
             $stmt = $pdo->prepare("INSERT INTO evaluaciones (tarea_id, rubrica_id, evaluador_id, evaluado_id, tipo, fecha) VALUES (?, ?, ?, ?, ?, NOW())");
