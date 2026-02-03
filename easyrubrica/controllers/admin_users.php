@@ -1,5 +1,5 @@
 <?php
-// controllers/admin_users.php
+// easyrubrica/controllers/admin_users.php
 require_once 'libs/Audit.php';
 
 if (!isset($currentUser) || ($currentUser['rol'] !== 'admin' && $currentUser['rol'] !== 'profesor')) {
@@ -9,10 +9,12 @@ if (!isset($currentUser) || ($currentUser['rol'] !== 'admin' && $currentUser['ro
 $mensaje = ""; $error = "";
 $search = $_GET['q'] ?? '';
 
+// --- CONFIGURACIÓN DE ORDENACIÓN ---
 $allowed_columns = ['usuario', 'nombre', 'rol', 'clase_nombre'];
-$order_by = isset($_GET['order_by']) && in_array($_GET['order_by'], $allowed_columns) ? $_GET['order_by'] : 'nombre';
+$order_by = (isset($_GET['order_by']) && in_array($_GET['order_by'], $allowed_columns)) ? $_GET['order_by'] : 'nombre';
 $dir = (isset($_GET['dir']) && strtolower($_GET['dir']) === 'desc') ? 'DESC' : 'ASC';
 
+// 1. DESCARGAR PLANTILLA
 if (isset($_GET['descargar_plantilla'])) {
     if (ob_get_length()) ob_end_clean();
     header('Content-Type: text/csv; charset=utf-8');
@@ -24,60 +26,84 @@ if (isset($_GET['descargar_plantilla'])) {
     fclose($output); exit;
 }
 
+// 2. IMPORTACIÓN MASIVA CORREGIDA
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['importar_csv'])) {
     if (isset($_FILES['archivo_csv']) && $_FILES['archivo_csv']['error'] === UPLOAD_ERR_OK) {
         try {
-            $file = $_FILES['archivo_csv']['tmp_name'];
-            if (($handle = fopen($file, "r")) !== FALSE) {
-                $bom = fread($handle, 3);
-                if ($bom != chr(0xEF).chr(0xBB).chr(0xBF)) rewind($handle);
-                $linea1 = fgets($handle);
-                $sep = (strpos($linea1, ';') !== false) ? ';' : ',';
-                rewind($handle);
-                if ($bom != chr(0xEF).chr(0xBB).chr(0xBF)) rewind($handle);
-                fgetcsv($handle, 1000, $sep); 
-                $pdo->beginTransaction(); $count = 0;
-                while (($data = fgetcsv($handle, 1000, $sep)) !== FALSE) {
-                    if (count($data) < 6) continue;
-                    list($rol, $user, $nombre, $email, $cl_nom, $pass) = $data;
-                    if ($currentUser['rol'] === 'profesor') $rol = 'alumno';
-                    $stCheck = $pdo->prepare("SELECT id FROM usuarios WHERE usuario = ?");
-                    $stCheck->execute([$user]);
-                    if (!$stCheck->fetch()) {
-                        $hash = password_hash($pass, PASSWORD_DEFAULT);
-                        $pdo->prepare("INSERT INTO usuarios (usuario, nombre, email, rol, password, creador_id, activo) VALUES (?, ?, ?, ?, ?, ?, 1)")
-                            ->execute([$user, $nombre, $email, $rol, $hash, $currentUser['id']]);
-                        $new_id = $pdo->lastInsertId();
-                        if (!empty(trim($cl_nom))) {
-                            $stCl = $pdo->prepare("SELECT id FROM clases WHERE nombre = ?");
-                            $stCl->execute([trim($cl_nom)]); $cid = $stCl->fetchColumn();
-                            if ($cid) $pdo->prepare("INSERT IGNORE INTO clase_usuario (clase_id, usuario_id) VALUES (?, ?)")->execute([$cid, $new_id]);
-                        }
-                        $count++;
+            $handle = fopen($_FILES['archivo_csv']['tmp_name'], "r");
+            
+            // Gestión de BOM para evitar errores en la primera columna
+            $bom = fread($handle, 3);
+            if ($bom !== chr(0xEF).chr(0xBB).chr(0xBF)) rewind($handle);
+            $start_pos = ftell($handle);
+
+            // Detectar separador
+            $linea1 = fgets($handle);
+            $sep = (strpos($linea1, ';') !== false) ? ';' : ',';
+            
+            // Volver al inicio de los datos (justo después del BOM si existe)
+            fseek($handle, $start_pos);
+            fgetcsv($handle, 1000, $sep); // Saltar cabecera
+
+            $pdo->beginTransaction(); 
+            $count = 0;
+            while (($data = fgetcsv($handle, 1000, $sep)) !== FALSE) {
+                if (count($data) < 6 || empty(trim($data[1]))) continue;
+                $row = array_map('trim', $data);
+                list($rol, $user, $nombre, $email, $cl_nom, $pass) = $row;
+                if ($currentUser['rol'] === 'profesor') $rol = 'alumno';
+                
+                $stCheck = $pdo->prepare("SELECT id FROM usuarios WHERE usuario = ?");
+                $stCheck->execute([$user]);
+                $existente = $stCheck->fetch();
+
+                if (!$existente) {
+                    $hash = password_hash($pass, PASSWORD_DEFAULT);
+                    $pdo->prepare("INSERT INTO usuarios (usuario, nombre, email, rol, password, creador_id, activo) VALUES (?, ?, ?, ?, ?, ?, 1)")
+                        ->execute([$user, $nombre, $email, $rol, $hash, $currentUser['id']]);
+                    $target_id = $pdo->lastInsertId();
+                    $count++;
+                } else {
+                    $target_id = $existente['id'];
+                    $pdo->prepare("UPDATE usuarios SET activo = 1 WHERE id = ?")->execute([$target_id]);
+                    $count++;
+                }
+
+                // VINCULACIÓN DE CLASE CORREGIDA
+                if (!empty($cl_nom)) {
+                    $stCl = $pdo->prepare("SELECT id FROM clases WHERE nombre = ?");
+                    $stCl->execute([$cl_nom]);
+                    $cid = $stCl->fetchColumn();
+                    
+                    // Si la clase no existe, se crea automáticamente
+                    if (!$cid) {
+                        $pdo->prepare("INSERT INTO clases (nombre) VALUES (?)")->execute([$cl_nom]);
+                        $cid = $pdo->lastInsertId();
+                    }
+
+                    if ($cid) {
+                        $pdo->prepare("INSERT IGNORE INTO clase_usuario (clase_id, usuario_id) VALUES (?, ?)")
+                            ->execute([$cid, $target_id]);
                     }
                 }
-                $pdo->commit(); Audit::log($pdo, "Importación Masiva", "Se importaron $count usuarios.");
-                $mensaje = "Importados $count usuarios."; fclose($handle);
             }
+            $pdo->commit(); 
+            Audit::log($pdo, "Importación Masiva", "Se importaron $count usuarios.");
+            $mensaje = "Importados $count usuarios."; fclose($handle);
         } catch (Exception $e) { if($pdo->inTransaction()) $pdo->rollBack(); $error = $e->getMessage(); }
     }
 }
 
-// ACCIÓN BORRAR (Ahora es Borrado Lógico / Desactivación)
+// 3. ACCIONES: BORRAR, CREAR Y EDITAR
 if (isset($_POST['borrar_masivo']) && isset($_POST['usuarios_ids'])) {
     try {
         $ids = array_filter($_POST['usuarios_ids'], fn($id) => $id != $currentUser['id']);
         if (!empty($ids)) {
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            if ($currentUser['rol'] === 'profesor') {
-                $stmt = $pdo->prepare("UPDATE usuarios SET activo = 0 WHERE id IN ($placeholders) AND creador_id = ? AND rol = 'alumno'");
-                $params = array_merge($ids, [$currentUser['id']]);
-            } else {
-                $stmt = $pdo->prepare("UPDATE usuarios SET activo = 0 WHERE id IN ($placeholders)");
-                $params = $ids;
-            }
-            $stmt->execute($params);
-            Audit::log($pdo, "Usuario Desactivado", "Borrado lógico de usuarios IDs: " . implode(',', $ids));
+            $sql_del = ($currentUser['rol'] === 'profesor') ? "UPDATE usuarios SET activo = 0 WHERE id IN ($placeholders) AND creador_id = ? AND rol = 'alumno'" : "UPDATE usuarios SET activo = 0 WHERE id IN ($placeholders)";
+            $params = ($currentUser['rol'] === 'profesor') ? array_merge($ids, [$currentUser['id']]) : $ids;
+            $pdo->prepare($sql_del)->execute($params);
+            Audit::log($pdo, "Usuario Desactivado", "IDs: " . implode(',', $ids));
             $mensaje = "Usuarios eliminados correctamente.";
         }
     } catch (Exception $e) { $error = $e->getMessage(); }
@@ -92,25 +118,21 @@ if (isset($_POST['crear_usuario'])) {
             ->execute([$_POST['usuario'], $_POST['nombre'], $_POST['email'], $rol_f, $hash, $currentUser['id']]);
         $nid = $pdo->lastInsertId();
         if (!empty($_POST['clases'])) { foreach ($_POST['clases'] as $cid) $pdo->prepare("INSERT INTO clase_usuario (clase_id, usuario_id) VALUES (?, ?)")->execute([$cid, $nid]); }
-        $pdo->commit(); Audit::log($pdo, "Usuario Creado", "Usuario: " . $_POST['usuario']);
-        $mensaje = "Usuario creado correctamente.";
+        $pdo->commit(); $mensaje = "Usuario creado correctamente.";
     } catch (Exception $e) { $pdo->rollBack(); $error = $e->getMessage(); }
 }
 
 if (isset($_POST['editar_usuario'])) {
     try {
         $pdo->beginTransaction(); $id_e = $_POST['id'];
-        $stT = $pdo->prepare("SELECT rol, creador_id FROM usuarios WHERE id = ?"); $stT->execute([$id_e]); $target = $stT->fetch();
-        if ($currentUser['rol'] === 'admin' || ($target && $target['creador_id'] == $currentUser['id'])) {
+        $stT = $pdo->prepare("SELECT creador_id FROM usuarios WHERE id = ?"); $stT->execute([$id_e]); $creador = $stT->fetchColumn();
+        if ($currentUser['rol'] === 'admin' || $creador == $currentUser['id']) {
             $rol_f = ($currentUser['rol'] === 'profesor') ? 'alumno' : $_POST['rol'];
             if (!empty($_POST['password'])) {
-                $pdo->prepare("UPDATE usuarios SET usuario=?, nombre=?, email=?, rol=?, password=? WHERE id=?")
-                    ->execute([$_POST['usuario'], $_POST['nombre'], $_POST['email'], $rol_f, password_hash($_POST['password'], PASSWORD_DEFAULT), $id_e]);
+                $pdo->prepare("UPDATE usuarios SET usuario=?, nombre=?, email=?, rol=?, password=? WHERE id=?")->execute([$_POST['usuario'], $_POST['nombre'], $_POST['email'], $rol_f, password_hash($_POST['password'], PASSWORD_DEFAULT), $id_e]);
             } else {
-                $pdo->prepare("UPDATE usuarios SET usuario=?, nombre=?, email=?, rol=? WHERE id=?")
-                    ->execute([$_POST['usuario'], $_POST['nombre'], $_POST['email'], $rol_f, $id_e]);
+                $pdo->prepare("UPDATE usuarios SET usuario=?, nombre=?, email=?, rol=? WHERE id=?")->execute([$_POST['usuario'], $_POST['nombre'], $_POST['email'], $rol_f, $id_e]);
             }
-            Audit::log($pdo, "Usuario Modificado", "ID: " . $id_e);
         }
         if ($currentUser['rol'] === 'admin') {
             $pdo->prepare("DELETE FROM clase_usuario WHERE usuario_id=?")->execute([$id_e]);
@@ -120,11 +142,12 @@ if (isset($_POST['editar_usuario'])) {
     } catch (Exception $e) { $pdo->rollBack(); $error = $e->getMessage(); }
 }
 
-// LISTADO: Solo activos
+// 4. LISTADO CON SQL DE ORDENACIÓN ROBUSTO
 $sql = "SELECT u.id, u.usuario, u.nombre, u.email, u.rol, u.creador_id, 
-        (SELECT GROUP_CONCAT(c.nombre SEPARATOR ', ') FROM clases c JOIN clase_usuario cu ON c.id = cu.clase_id WHERE cu.usuario_id = u.id) as clase_nombre
+        (SELECT GROUP_CONCAT(c.nombre SEPARATOR ', ') FROM clases c JOIN clase_usuario cu ON c.id = cu.clase_id WHERE cu.usuario_id = u.id) as clase_nombre 
         FROM usuarios u WHERE u.activo = 1 ORDER BY $order_by $dir";
 $usuarios = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+
 foreach ($usuarios as $k => $u) {
     $stI = $pdo->prepare("SELECT clase_id FROM clase_usuario WHERE usuario_id = ?");
     $stI->execute([$u['id']]); $usuarios[$k]['clases_ids'] = $stI->fetchAll(PDO::FETCH_COLUMN);
