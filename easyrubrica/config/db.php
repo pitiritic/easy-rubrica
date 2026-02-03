@@ -27,36 +27,38 @@ try {
 function checkAndMigrate($pdo) {
     if (!$pdo) return;
     try {
+        // 1. MIGRACIONES DE LA TABLA USUARIOS
         $stmt = $pdo->query("DESCRIBE usuarios");
-        $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $colsUsuarios = $stmt->fetchAll(PDO::FETCH_COLUMN);
         
-        if (!in_array('reset_token', $columns)) { $pdo->exec("ALTER TABLE usuarios ADD COLUMN reset_token VARCHAR(255) NULL AFTER password"); }
-        if (!in_array('reset_expires', $columns)) { $pdo->exec("ALTER TABLE usuarios ADD COLUMN reset_expires DATETIME NULL AFTER reset_token"); }
-        if (!in_array('creador_id', $columns)) {
-            $pdo->exec("ALTER TABLE usuarios ADD COLUMN creador_id INT NULL");
-            $stmtAdmin = $pdo->query("SELECT id FROM usuarios WHERE rol = 'admin' LIMIT 1");
-            $adminId = $stmtAdmin->fetchColumn();
-            if ($adminId) { $pdo->prepare("UPDATE usuarios SET creador_id = ? WHERE creador_id IS NULL")->execute([$adminId]); }
-        }
+        if (!in_array('reset_token', $colsUsuarios)) { $pdo->exec("ALTER TABLE usuarios ADD COLUMN reset_token VARCHAR(255) NULL"); }
+        if (!in_array('reset_expires', $colsUsuarios)) { $pdo->exec("ALTER TABLE usuarios ADD COLUMN reset_expires DATETIME NULL"); }
+        if (!in_array('creador_id', $colsUsuarios)) { $pdo->exec("ALTER TABLE usuarios ADD COLUMN creador_id INT NULL"); }
+        // Columna crítica que falta en tu nuevo servidor:
+        if (!in_array('activo', $colsUsuarios)) { $pdo->exec("ALTER TABLE usuarios ADD COLUMN activo TINYINT(1) DEFAULT 1"); }
 
+        // 2. MIGRACIONES DE LA TABLA CLASE_RUBRICA (Depósito)
+        $stmt = $pdo->query("DESCRIBE clase_rubrica");
+        $colsTareas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('archivada', $colsTareas)) { $pdo->exec("ALTER TABLE clase_rubrica ADD COLUMN archivada TINYINT(1) DEFAULT 0"); }
+        if (!in_array('curso_academico', $colsTareas)) { $pdo->exec("ALTER TABLE clase_rubrica ADD COLUMN curso_academico VARCHAR(20) NULL"); }
+
+        // 3. MIGRACIONES DE LA TABLA EVALUACIONES (Anulación)
+        $stmt = $pdo->query("DESCRIBE evaluaciones");
+        $colsEvals = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('anulada', $colsEvals)) { $pdo->exec("ALTER TABLE evaluaciones ADD COLUMN anulada TINYINT(1) DEFAULT 0"); }
+        
+        // CORRECCIÓN TIPO ENUM (Para evitar error 'Data truncated')
         $pdo->exec("ALTER TABLE evaluaciones MODIFY COLUMN tipo ENUM('auto', 'coeval', 'hetero') NOT NULL");
 
-        // Tablas de ajustes
+        // 4. TABLAS DE SOPORTE (Ajustes y Auditoría)
         $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_smtp (id INT PRIMARY KEY, smtp_host VARCHAR(100), smtp_user VARCHAR(100), smtp_pass VARCHAR(255), smtp_port INT DEFAULT 587, smtp_secure ENUM('tls', 'ssl') DEFAULT 'tls', from_email VARCHAR(100), from_name VARCHAR(100) DEFAULT 'EasyRúbrica') ENGINE=InnoDB");
         $pdo->exec("INSERT IGNORE INTO ajustes_smtp (id, from_name) VALUES (1, 'EasyRúbrica')");
+
         $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_sistema (id INT PRIMARY KEY, url_ayuda VARCHAR(255) DEFAULT '#', url_acerca VARCHAR(255) DEFAULT '#') ENGINE=InnoDB");
         $pdo->exec("INSERT IGNORE INTO ajustes_sistema (id) VALUES (1)");
 
-        // NUEVA TABLA DE AUDITORÍA
-        $pdo->exec("CREATE TABLE IF NOT EXISTS auditoria (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            usuario_id INT,
-            usuario_nombre VARCHAR(100),
-            evento VARCHAR(100),
-            detalles TEXT,
-            ip VARCHAR(45)
-        ) ENGINE=InnoDB");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS auditoria (id INT AUTO_INCREMENT PRIMARY KEY, fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP, usuario_id INT, usuario_nombre VARCHAR(100), evento VARCHAR(100), detalles TEXT, ip VARCHAR(45), INDEX (fecha)) ENGINE=InnoDB");
 
     } catch (Exception $e) {}
 }
@@ -64,22 +66,111 @@ function checkAndMigrate($pdo) {
 function installDB($pdo) {
     if (!$pdo) return;
     global $db;
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$db` ");
     $pdo->exec("USE `$db` ");
 
-    $pdo->exec("CREATE TABLE IF NOT EXISTS usuarios (id INT AUTO_INCREMENT PRIMARY KEY, usuario VARCHAR(50) UNIQUE NOT NULL, password VARCHAR(255) NOT NULL, nombre VARCHAR(100), email VARCHAR(100), rol ENUM('admin', 'profesor', 'alumno') DEFAULT 'alumno', reset_token VARCHAR(255) NULL, reset_expires DATETIME NULL, creador_id INT NULL) ENGINE=InnoDB;");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS clases (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL, autor_id INT, FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE) ENGINE=InnoDB;");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS clase_usuario (clase_id INT, usuario_id INT, autor_id INT NULL, PRIMARY KEY (clase_id, usuario_id), FOREIGN KEY (clase_id) REFERENCES clases(id) ON DELETE CASCADE, FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE, FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE SET NULL) ENGINE=InnoDB;");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS rubricas (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL, descripcion TEXT, asignatura VARCHAR(100), competencias JSON, autor_id INT NULL, FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE SET NULL) ENGINE=InnoDB;");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS criterios (id INT AUTO_INCREMENT PRIMARY KEY, rubrica_id INT, nombre VARCHAR(255) NOT NULL, FOREIGN KEY (rubrica_id) REFERENCES rubricas(id) ON DELETE CASCADE) ENGINE=InnoDB;");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS niveles (id INT AUTO_INCREMENT PRIMARY KEY, criterio_id INT, valor INT NOT NULL, etiqueta VARCHAR(100), descriptor TEXT, FOREIGN KEY (criterio_id) REFERENCES niveles(id) ON DELETE CASCADE) ENGINE=InnoDB;");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS clase_rubrica (id INT AUTO_INCREMENT PRIMARY KEY, clase_id INT, rubrica_id INT, titulo VARCHAR(150), estado ENUM('0', 'activa', 'cerrada') DEFAULT '0', autor_id INT NULL, peso_hetero INT DEFAULT 100, peso_coeval INT DEFAULT 0, peso_auto INT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (clase_id) REFERENCES clases(id) ON DELETE CASCADE, FOREIGN KEY (rubrica_id) REFERENCES rubricas(id) ON DELETE CASCADE, FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE SET NULL) ENGINE=InnoDB;");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS evaluaciones (id INT AUTO_INCREMENT PRIMARY KEY, tarea_id INT, rubrica_id INT, evaluador_id INT, evaluado_id INT, tipo ENUM('auto', 'coeval', 'hetero') NOT NULL, calificacion_final DECIMAL(5,2) DEFAULT 0, comentarios TEXT, fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (tarea_id) REFERENCES clase_rubrica(id) ON DELETE CASCADE, FOREIGN KEY (rubrica_id) REFERENCES rubricas(id) ON DELETE CASCADE, FOREIGN KEY (evaluador_id) REFERENCES usuarios(id) ON DELETE CASCADE, FOREIGN KEY (evaluado_id) REFERENCES usuarios(id) ON DELETE CASCADE) ENGINE=InnoDB;");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS puntuaciones (id INT AUTO_INCREMENT PRIMARY KEY, evaluacion_id INT, criterio_id INT, nivel_id INT NULL, valor_obtenido INT, FOREIGN KEY (evaluacion_id) REFERENCES evaluaciones(id) ON DELETE CASCADE, FOREIGN KEY (criterio_id) REFERENCES criterios(id) ON DELETE CASCADE, FOREIGN KEY (nivel_id) REFERENCES niveles(id) ON DELETE CASCADE) ENGINE=InnoDB;");
+    // Creamos las tablas ya con todas las columnas nuevas incluidas
+    $pdo->exec("CREATE TABLE IF NOT EXISTS usuarios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario VARCHAR(50) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        nombre VARCHAR(100),
+        email VARCHAR(100),
+        rol ENUM('admin', 'profesor', 'alumno') DEFAULT 'alumno',
+        reset_token VARCHAR(255) NULL,
+        reset_expires DATETIME NULL,
+        creador_id INT NULL,
+        activo TINYINT(1) DEFAULT 1
+    ) ENGINE=InnoDB;");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS clases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        autor_id INT,
+        FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS clase_usuario (
+        clase_id INT,
+        usuario_id INT,
+        autor_id INT NULL,
+        PRIMARY KEY (clase_id, usuario_id),
+        FOREIGN KEY (clase_id) REFERENCES clases(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS rubricas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        descripcion TEXT,
+        asignatura VARCHAR(100),
+        competencias JSON,
+        autor_id INT NULL,
+        FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB;");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS criterios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        rubrica_id INT,
+        nombre VARCHAR(255) NOT NULL,
+        FOREIGN KEY (rubrica_id) REFERENCES rubricas(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS niveles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        criterio_id INT,
+        valor INT NOT NULL,
+        etiqueta VARCHAR(100),
+        descriptor TEXT,
+        FOREIGN KEY (criterio_id) REFERENCES criterios(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS clase_rubrica (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        clase_id INT,
+        rubrica_id INT,
+        titulo VARCHAR(150),
+        estado ENUM('0', 'activa', 'cerrada') DEFAULT '0',
+        autor_id INT NULL,
+        peso_hetero INT DEFAULT 100,
+        peso_coeval INT DEFAULT 0,
+        peso_auto INT DEFAULT 0,
+        archivada TINYINT(1) DEFAULT 0,
+        curso_academico VARCHAR(20) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+        FOREIGN KEY (clase_id) REFERENCES clases(id) ON DELETE CASCADE,
+        FOREIGN KEY (rubrica_id) REFERENCES rubricas(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS evaluaciones (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tarea_id INT,
+        rubrica_id INT,
+        evaluador_id INT,
+        evaluado_id INT,
+        tipo ENUM('auto', 'coeval', 'hetero') NOT NULL,
+        calificacion_final DECIMAL(5,2) DEFAULT 0,
+        comentarios TEXT,
+        anulada TINYINT(1) DEFAULT 0,
+        fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tarea_id) REFERENCES clase_rubrica(id) ON DELETE CASCADE,
+        FOREIGN KEY (evaluador_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (evaluado_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS puntuaciones (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        evaluacion_id INT,
+        criterio_id INT,
+        valor_obtenido INT, 
+        FOREIGN KEY (evaluacion_id) REFERENCES evaluaciones(id) ON DELETE CASCADE,
+        FOREIGN KEY (criterio_id) REFERENCES criterios(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;");
+
+    // Tablas de soporte
     $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_smtp (id INT PRIMARY KEY, smtp_host VARCHAR(100), smtp_user VARCHAR(100), smtp_pass VARCHAR(255), smtp_port INT DEFAULT 587, smtp_secure ENUM('tls', 'ssl') DEFAULT 'tls', from_email VARCHAR(100), from_name VARCHAR(100) DEFAULT 'EasyRúbrica') ENGINE=InnoDB;");
     $pdo->exec("INSERT IGNORE INTO ajustes_smtp (id, from_name) VALUES (1, 'EasyRúbrica')");
     $pdo->exec("CREATE TABLE IF NOT EXISTS ajustes_sistema (id INT PRIMARY KEY, url_ayuda VARCHAR(255) DEFAULT '#', url_acerca VARCHAR(255) DEFAULT '#') ENGINE=InnoDB;");
     $pdo->exec("INSERT IGNORE INTO ajustes_sistema (id) VALUES (1)");
-
-    // TABLA AUDITORIA EN INSTALACIÓN LIMPIA
-    $pdo->exec("CREATE TABLE IF NOT EXISTS auditoria (id INT AUTO_INCREMENT PRIMARY KEY, fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP, usuario_id INT, usuario_nombre VARCHAR(100), evento VARCHAR(100), detalles TEXT, ip VARCHAR(45)) ENGINE=InnoDB");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS auditoria (id INT AUTO_INCREMENT PRIMARY KEY, fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP, usuario_id INT, usuario_nombre VARCHAR(100), evento VARCHAR(100), detalles TEXT, ip VARCHAR(45), INDEX (fecha)) ENGINE=InnoDB;");
 }
