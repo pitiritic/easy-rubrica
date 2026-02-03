@@ -102,15 +102,16 @@ switch ($action) {
     case 'login':                require 'controllers/auth.php'; break;
     case 'recover':              require 'controllers/recover.php'; break;
     case 'exportar_pdf':         require 'controllers/pdf_rubrica.php'; break;
-    case 'logout':               require 'controllers/auth.php'; break; // Cambiado para que Audit registre el cierre
+    case 'logout':               require 'controllers/auth.php'; break; 
     case 'usuarios':             require 'controllers/admin_users.php'; break;
     case 'gestion_clases_lista': require 'controllers/admin_classes.php'; break;
     case 'asignar_rubricas':     require 'controllers/admin.php'; break;
     case 'rubricas':             require 'controllers/rubricas.php'; break;
     case 'evaluar':              require 'controllers/evaluar.php'; break;
+    case 'ver_resultados':       // <--- NUEVO: Si viene de la gráfica, cargar controlador de notas
     case 'notas':                require 'controllers/notas.php'; break;
     case 'ajustes':              require 'controllers/ajustes.php'; break;
-    case 'auditoria':            require 'controllers/auditoria.php'; break; // <--- NUEVA RUTA INTEGRADA
+    case 'auditoria':            require 'controllers/auditoria.php'; break; 
     case 'home':
     default:                     $is_dashboard = true; break;
 }
@@ -121,7 +122,6 @@ $clean_content = ob_get_clean();
 if (in_array($action, ['login', 'install', 'recover'])) {
     echo $clean_content;
 } else {
-    // El header usará automáticamente la variable $ajustes_sis cargada en el punto 3
     if (file_exists('views/layout/header.php')) { require 'views/layout/header.php'; }
     
     if ($is_dashboard) {
